@@ -11,13 +11,13 @@
      * Function: `decrypt_caesar(ciphertext, shift)`
      * Handle wrap-around for letters.
 
-2. **Affine Cipher**
+    2. **Affine Cipher**
 
-   * **Description:** Uses `E(x) = (a*x + b) mod m` for encryption; more secure than Caesar.
-   * **TODO:**
+    * **Description:** Uses `E(x) = (a*x + b) mod m` for encryption; more secure than Caesar.
+    * **TODO:**
 
-     * Function: `encrypt_affine(plaintext, a, b)`
-     * Function: `decrypt_affine(ciphertext, a, b)` (requires modular inverse of `a`)
+        * Function: `encrypt_affine(plaintext, a, b)`
+        * Function: `decrypt_affine(ciphertext, a, b)` (requires modular inverse of `a`)
 
 3. **Vigenère Cipher**
 
