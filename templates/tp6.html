@@ -1,0 +1,94 @@
+{{define "tp6"}}
+<div class="space-y-12">
+    
+    <!-- Secure Chat Simulation -->
+    <section class="cyber-panel p-8 rounded-2xl">
+        <h3 class="text-2xl font-bold text-green-500 mb-8">Secure Chat Simulation</h3>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Chat Window -->
+            <div class="lg:col-span-2 space-y-4">
+                <div class="bg-black/60 rounded-xl border border-gray-800 h-96 overflow-y-auto p-4 flex flex-col space-y-4">
+                    {{if .ChatLog}}
+                        {{range .ChatLog}}
+                        <div class="bg-gray-900 border border-gray-800 p-3 rounded-lg self-start max-w-[80%]">
+                            <p class="text-xs font-mono text-green-400 mb-1">Incoming Secure Packet...</p>
+                            <p class="text-sm text-gray-300">{{.}}</p>
+                        </div>
+                        {{end}}
+                    {{else}}
+                        <div class="flex-1 flex items-center justify-center text-gray-700 text-sm">
+                            No messages in this session. Start the secure exchange below.
+                        </div>
+                    {{end}}
+                </div>
+
+                <form action="/tp6/chat" method="POST" class="flex space-x-2">
+                    <input type="text" name="message" class="flex-1 bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none" placeholder="Type a message to encrypt and send...">
+                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                        Send Secure
+                    </button>
+                </form>
+            </div>
+
+            <!-- Protocol Status -->
+            <div class="space-y-6">
+                <div class="cyber-panel p-6 rounded-xl border-green-500/20">
+                    <h4 class="text-xs font-bold text-gray-500 uppercase mb-4 tracking-widest">Active Protocol Stack</h4>
+                    <ul class="space-y-3">
+                        <li class="flex items-center text-xs text-green-400">
+                            <span class="w-2 h-2 bg-green-500 rounded-full mr-3 animate-pulse"></span>
+                            Handshake: Diffie-Hellman
+                        </li>
+                        <li class="flex items-center text-xs text-green-400">
+                            <span class="w-2 h-2 bg-green-500 rounded-full mr-3 animate-pulse"></span>
+                            Cipher: AES-128 (ECB)
+                        </li>
+                        <li class="flex items-center text-xs text-green-400">
+                            <span class="w-2 h-2 bg-green-500 rounded-full mr-3 animate-pulse"></span>
+                            Integrity: SHA-256
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="bg-blue-900/10 border border-blue-500/20 p-6 rounded-xl">
+                    <h4 class="text-xs font-bold text-blue-400 uppercase mb-2 tracking-widest">TP 6.1 Info</h4>
+                    <p class="text-[10px] text-gray-500 leading-relaxed">
+                        This module simulates the multi-layered protection required for secure socket applications. Every message is padded, encrypted, and hashed before transmission.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Electronic Voting Module -->
+    <section class="cyber-panel p-8 rounded-2xl">
+        <h3 class="text-xl font-bold text-green-500 mb-6">Electronic Voting (Homomorphic Demo)</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            <div class="space-y-4">
+                <p class="text-xs text-gray-500">Homomorphic encryption allows performing calculations on ciphertexts. In voting, this means tallying encrypted votes without ever decrypting individual ones.</p>
+                <div class="flex space-x-4">
+                    <button disabled class="flex-1 bg-gray-800 text-gray-600 py-3 rounded-lg text-sm font-bold cursor-not-allowed">Vote Candidate A</button>
+                    <button disabled class="flex-1 bg-gray-800 text-gray-600 py-3 rounded-lg text-sm font-bold cursor-not-allowed">Vote Candidate B</button>
+                </div>
+            </div>
+            <div class="bg-black/40 p-6 rounded-xl border border-gray-800">
+                <h4 class="text-xs font-bold text-gray-500 uppercase mb-4">Encrypted Tally</h4>
+                <div class="space-y-2">
+                    <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
+                        <div class="w-1/2 h-full bg-green-500/50"></div>
+                    </div>
+                    <div class="flex justify-between text-[10px] font-mono text-gray-600">
+                        <span>E(Votes_A)</span>
+                        <span>E(Votes_B)</span>
+                    </div>
+                </div>
+                <div class="mt-6 text-center">
+                    <span class="text-[10px] text-yellow-600 uppercase border border-yellow-600/30 px-2 py-1 rounded">Module Locked (Final TP)</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</div>
+{{end}}

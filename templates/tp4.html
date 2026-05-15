@@ -1,0 +1,66 @@
+{{define "tp4"}}
+<div class="space-y-12">
+    
+    <!-- Hash Inspector -->
+    <section class="cyber-panel p-8 rounded-2xl">
+        <h3 class="text-2xl font-bold text-green-500 mb-8">Hash Inspector</h3>
+        
+        <form action="/tp4/hash" method="POST" class="space-y-6 mb-8">
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-400">Input Data</label>
+                <textarea name="input_text" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none" placeholder="Enter text to hash...">{{.InputText}}</textarea>
+            </div>
+            <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-all">
+                Compute Hashes
+            </button>
+        </form>
+
+        {{if .Hashes}}
+        <div class="space-y-6">
+            {{range $name, $hash := .Hashes}}
+            <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold text-gray-500 uppercase">{{$name}}</span>
+                    <span class="text-[10px] text-gray-600">{{len $hash}} chars (hex)</span>
+                </div>
+                <div class="bg-black/40 p-4 rounded-xl border border-gray-800 font-mono text-sm text-green-400 break-all">
+                    {{$hash}}
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+    </section>
+
+    <!-- Hash Avalanche -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div class="cyber-panel p-8 rounded-2xl">
+            <h3 class="text-xl font-bold text-green-500 mb-6">SHA-256 Avalanche</h3>
+            <div class="space-y-6">
+                <p class="text-xs text-gray-500">Changing 1 bit in the input message completely randomizes the resulting SHA-256 hash.</p>
+                <div class="bg-black/40 p-10 rounded-xl border border-gray-800 text-center">
+                    <div class="text-6xl font-bold {{if gt .HashAval 45.0}}text-green-400{{else}}text-yellow-500{{end}} mb-2">{{printf "%.1f" .HashAval}}%</div>
+                    <div class="text-xs text-gray-600 uppercase tracking-widest">Bit Diffusion</div>
+                </div>
+                <div class="text-center text-[10px] text-gray-600 italic">
+                    * A perfect hash should ideally have ~50% avalanche effect.
+                </div>
+            </div>
+        </div>
+
+        <div class="cyber-panel p-8 rounded-2xl">
+            <h3 class="text-xl font-bold text-green-500 mb-6">Digital Signatures</h3>
+            <div class="space-y-6">
+                <div class="flex flex-col items-center justify-center h-48 border-2 border-dashed border-gray-800 rounded-xl text-gray-600 space-y-4">
+                    <span class="text-4xl">🔏</span>
+                    <p class="text-sm">RSA-PSS & ECDSA Module</p>
+                </div>
+                <button disabled class="w-full bg-gray-800 text-gray-600 cursor-not-allowed py-3 rounded-lg text-sm font-bold">
+                    Coming Soon (TP 5)
+                </button>
+            </div>
+        </div>
+    </section>
+
+</div>
+{{end}}

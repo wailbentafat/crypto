@@ -1,0 +1,203 @@
+{{define "tp1"}}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    
+    <!-- Input Section -->
+    <div class="space-y-6">
+        <form action="/tp1/analyze" method="POST" class="cyber-panel p-6 rounded-xl space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-2 text-green-500">Input Text</label>
+                <textarea name="input_text" rows="6" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none transition-all" placeholder="Enter text to analyze or encrypt...">{{.InputText}}</textarea>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-400">Algorithm</label>
+                    <select name="algorithm" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm outline-none focus:border-green-500">
+                        <option value="none" {{if eq .Algorithm "none"}}selected{{end}}>Analysis Only</option>
+                        <option value="caesar" {{if eq .Algorithm "caesar"}}selected{{end}}>Caesar Cipher</option>
+                        <option value="vigenere" {{if eq .Algorithm "vigenere"}}selected{{end}}>Vigenère Cipher</option>
+                        <option value="hill" {{if eq .Algorithm "hill"}}selected{{end}}>Hill Cipher</option>
+                        <option value="otp" {{if eq .Algorithm "otp"}}selected{{end}}>One-Time Pad (XOR)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-400">Mode / Matrix Size</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <select name="mode" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm outline-none focus:border-green-500">
+                            <option value="encrypt" {{if eq .Mode "encrypt"}}selected{{end}}>Encrypt</option>
+                            <option value="decrypt" {{if eq .Mode "decrypt"}}selected{{end}}>Decrypt</option>
+                        </select>
+                        <select name="matrix_size" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm outline-none focus:border-green-500">
+                            <option value="2" {{if eq .MatrixSize 2}}selected{{end}}>2x2</option>
+                            <option value="3" {{if eq .MatrixSize 3}}selected{{end}}>3x3</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-400">Key (Vigenère)</label>
+                    <input type="text" name="key" value="{{.Key}}" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm outline-none focus:border-green-500" placeholder="SECRET">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-400">Shift (Caesar)</label>
+                    <input type="number" name="shift" value="{{.Shift}}" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm outline-none focus:border-green-500" placeholder="3">
+                </div>
+            </div>
+
+            <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors shadow-lg shadow-green-900/20">
+                Execute Process
+            </button>
+        </form>
+
+        {{if .Error}}
+        <div class="bg-red-900/20 border border-red-500/50 text-red-400 p-4 rounded-lg text-sm">
+            <strong>Error:</strong> {{.Error}}
+        </div>
+        {{end}}
+
+        {{if .Result}}
+        <div class="cyber-panel p-6 rounded-xl">
+            <h3 class="text-lg font-semibold mb-4 text-green-500 flex justify-between">
+                Processed Result
+                <span class="text-xs text-gray-500 font-normal self-center">IC: {{printf "%.4f" .Result.IC}}</span>
+            </h3>
+            <div class="bg-black/50 p-4 rounded-lg border border-gray-800 break-all font-mono text-sm">
+                {{.Result.Text}}
+            </div>
+            <div class="mt-4 text-xs text-gray-500">
+                * Standard French IC is approx 0.074. Random text is 0.038.
+            </div>
+        </div>
+        {{end}}
+    </div>
+
+    <!-- Analytics Section -->
+    <div class="space-y-6">
+        <div class="cyber-panel p-6 rounded-xl flex flex-col">
+            <h3 class="text-lg font-semibold mb-6 text-green-500">Frequency Analysis</h3>
+            <div class="min-h-[300px]">
+                <canvas id="freqChart"></canvas>
+            </div>
+        </div>
+
+        {{if .Kasiski}}
+        <div class="cyber-panel p-6 rounded-xl">
+            <h3 class="text-lg font-semibold mb-4 text-green-500">Kasiski Examination</h3>
+            <div class="space-y-4">
+                <div>
+                    <span class="text-sm text-gray-400">Possible Key Lengths:</span>
+                    <div class="flex flex-wrap gap-2 mt-2">
+                        {{range .Kasiski.PossibleLengths}}
+                        <span class="bg-green-900/40 text-green-400 px-3 py-1 rounded-full text-xs border border-green-500/30">{{.}}</span>
+                        {{end}}
+                    </div>
+                </div>
+                <div class="max-h-40 overflow-y-auto">
+                    <table class="w-full text-xs text-left">
+                        <thead class="text-gray-500 border-b border-gray-800">
+                            <tr>
+                                <th class="pb-2">Sequence</th>
+                                <th class="pb-2">Distances</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-800">
+                            {{range $seq, $dists := .Kasiski.Sequences}}
+                            <tr>
+                                <td class="py-2 font-mono text-green-400">{{$seq}}</td>
+                                <td class="py-2 text-gray-400">{{range $dists}}{{.}} {{end}}</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {{end}}
+
+        <div class="cyber-panel p-6 rounded-xl">
+            <h3 class="text-lg font-semibold mb-4 text-green-500">OTP Crib Dragging (C1 ⊕ C2)</h3>
+            <form action="/tp1/crib" method="POST" class="space-y-4">
+                <div class="grid grid-cols-1 gap-4">
+                    <input type="text" name="c1" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-xs font-mono outline-none focus:border-green-500" placeholder="Ciphertext 1 (Hex)">
+                    <input type="text" name="c2" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-xs font-mono outline-none focus:border-green-500" placeholder="Ciphertext 2 (Hex)">
+                </div>
+                <button type="submit" class="w-full bg-gray-800 hover:bg-gray-700 text-green-500 font-bold py-2 rounded-lg text-sm border border-green-500/20 transition-all">
+                    XOR Ciphertexts
+                </button>
+            </form>
+            {{if .CribResult}}
+            <div class="mt-4">
+                <label class="block text-xs text-gray-500 mb-2">XOR Result (Hex):</label>
+                <div class="bg-black/50 p-3 rounded border border-gray-800 break-all font-mono text-xs text-green-400">
+                    {{.CribResult}}
+                </div>
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+</div>
+
+{{if .Result}}
+<script>
+    const ctx = document.getElementById('freqChart').getContext('2d');
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    const data = {{.Result.Frequencies}};
+    const standard = {{.StandardFreq}};
+
+    const freqData = letters.map(l => data[l] || 0);
+    const standardData = letters.map(l => standard[l] || 0);
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: letters,
+            datasets: [
+                {
+                    label: 'Ciphertext Frequency (%)',
+                    data: freqData,
+                    backgroundColor: 'rgba(34, 197, 94, 0.6)',
+                    borderColor: 'rgb(34, 197, 94)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Standard English (%)',
+                    data: standardData,
+                    backgroundColor: 'rgba(107, 114, 128, 0.2)',
+                    borderColor: 'rgb(107, 114, 128)',
+                    borderWidth: 1,
+                    type: 'line',
+                    tension: 0.4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: '#30363d' },
+                    ticks: { color: '#8b949e' }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#8b949e' }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: { color: '#8b949e', font: { family: "'Fira Code', monospace" } }
+                }
+            }
+        }
+    });
+</script>
+{{else}}
+<div class="hidden">
+    <!-- Placeholder for empty state if needed -->
+</div>
+{{end}}
+{{end}}

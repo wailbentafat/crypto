@@ -16,6 +16,7 @@ import (
 	sha256 "crypto/internal/SHA256"
 	serpent "crypto/internal/Serpent"
 	vigenere "crypto/internal/Vigenere"
+	"crypto/internal/web"
 	"flag"
 	"fmt"
 	"os"
@@ -38,10 +39,20 @@ var (
 	prime      = flag.Int("p", 0, "Prime p for DH/ElGamal")
 	generator  = flag.Int("g", 0, "Generator g for DH/ElGamal")
 	bits       = flag.Int("bits", 2048, "Key size in bits for RSA")
+	serve      = flag.Bool("serve", false, "Start the web server dashboard")
+	port       = flag.Int("port", 8080, "Port for the web server")
 )
 
 func main() {
 	flag.Parse()
+
+	if *serve {
+		if err := web.StartServer(*port); err != nil {
+			fmt.Fprintf(os.Stderr, "Error starting server: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	var input string
 	if *inputFile != "" {

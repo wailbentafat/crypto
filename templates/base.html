@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - CryptoLab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&display=swap');
+        body { font-family: 'Fira Code', monospace; }
+        .cyber-bg { background-color: #0d1117; }
+        .cyber-panel { background-color: #161b22; border: 1px solid #30363d; }
+    </style>
+</head>
+<body class="cyber-bg text-gray-300 min-h-screen flex">
+
+    <!-- Sidebar -->
+    <div class="w-64 cyber-panel border-r border-gray-700 flex flex-col">
+        <div class="p-6 border-b border-gray-700">
+            <h1 class="text-2xl font-bold text-green-500 tracking-tighter">CryptoLab</h1>
+            <p class="text-xs text-gray-500">v1.0 Dashboard</p>
+        </div>
+        <nav class="flex-1 p-4">
+            <ul class="space-y-2">
+                <li>
+                    <a href="/tp1" class="flex items-center p-3 rounded-lg {{if eq .ActiveTab "tp1"}}bg-green-900/20 text-green-400 border border-green-500/50{{else}}hover:bg-gray-800{{end}}">
+                        <span class="mr-3">🧪</span> TP 1: Classical
+                    </a>
+                </li>
+                <li>
+                    <a href="/tp2" class="flex items-center p-3 rounded-lg {{if eq .ActiveTab "tp2"}}bg-green-900/20 text-green-400 border border-green-500/50{{else}}hover:bg-gray-800{{end}}">
+                        <span class="mr-3">🖼️</span> TP 2: Symmetric
+                    </a>
+                </li>
+                <li>
+                    <a href="/tp3" class="flex items-center p-3 rounded-lg {{if eq .ActiveTab "tp3"}}bg-green-900/20 text-green-400 border border-green-500/50{{else}}hover:bg-gray-800{{end}}">
+                        <span class="mr-3">🔑</span> TP 3: Asymmetric
+                    </a>
+                </li>
+                <li>
+                    <a href="/tp4" class="flex items-center p-3 rounded-lg {{if eq .ActiveTab "tp4"}}bg-green-900/20 text-green-400 border border-green-500/50{{else}}hover:bg-gray-800{{end}}">
+                        <span class="mr-3">🛡️</span> TP 4: Integrity
+                    </a>
+                </li>
+                <li>
+                    <a href="/tp6" class="flex items-center p-3 rounded-lg {{if eq .ActiveTab "tp6"}}bg-green-900/20 text-green-400 border border-green-500/50{{else}}hover:bg-gray-800{{end}}">
+                        <span class="mr-3">💬</span> TP 6: Secure App
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        <div class="p-4 border-t border-gray-700 text-xs text-center text-gray-500">
+            USTHB - Ing 3 Cybersécurité
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col h-screen overflow-y-auto">
+        <header class="p-6 cyber-panel border-b border-gray-700 flex justify-between items-center">
+            <h2 class="text-xl font-semibold">{{.Title}}</h2>
+            <div class="flex items-center space-x-4">
+                <span class="text-sm text-gray-500">Status: <span class="text-green-500">Online</span></span>
+            </div>
+        </header>
+
+        <main class="p-8 flex-1">
+            {{if eq .ActiveTab "tp1"}}
+                {{template "tp1" .}}
+            {{end}}
+            {{if eq .ActiveTab "tp2"}}
+                {{template "tp2" .}}
+            {{end}}
+            {{if eq .ActiveTab "tp3"}}
+                {{template "tp3" .}}
+            {{end}}
+            {{if eq .ActiveTab "tp4"}}
+                {{template "tp4" .}}
+            {{end}}
+            {{if eq .ActiveTab "tp6"}}
+                {{template "tp6" .}}
+            {{end}}
+        </main>
+    </div>
+
+</body>
+</html>

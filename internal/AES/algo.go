@@ -255,14 +255,45 @@ func (a *AESAlgo) Encrypt(plaintext string) string {
 	plaintextBytes := []byte(plaintext)
 	plaintextBytes = append(plaintextBytes, bytes.Repeat([]byte{byte(padding)}, padding)...)
 
+	result := a.EncryptECB(plaintextBytes)
+	return hex.EncodeToString(result)
+}
+
+// EncryptECB encrypts data in Electronic Codebook mode.
+func (a *AESAlgo) EncryptECB(data []byte) []byte {
 	var result []byte
-	for i := 0; i < len(plaintextBytes); i += 16 {
-		block := plaintextBytes[i : i+16]
+	for i := 0; i < len(data); i += 16 {
+		if i+16 > len(data) {
+			result = append(result, data[i:]...) // Leave partial block unencrypted for simplicity in demo
+			break
+		}
+		block := data[i : i+16]
 		encrypted := a.encryptBlock(block)
 		result = append(result, encrypted...)
 	}
+	return result
+}
 
-	return hex.EncodeToString(result)
+// EncryptCBC encrypts data in Cipher Block Chaining mode.
+func (a *AESAlgo) EncryptCBC(data []byte, iv []byte) []byte {
+	if len(iv) != 16 {
+		iv = make([]byte, 16) // Default IV
+	}
+
+	var result []byte
+	prevBlock := iv
+	for i := 0; i < len(data); i += 16 {
+		if i+16 > len(data) {
+			result = append(result, data[i:]...)
+			break
+		}
+		block := data[i : i+16]
+		xorBlock := xorBytes(block, prevBlock)
+		encrypted := a.encryptBlock(xorBlock)
+		result = append(result, encrypted...)
+		prevBlock = encrypted
+	}
+	return result
 }
 
 func (a *AESAlgo) Decrypt(ciphertext string) string {
