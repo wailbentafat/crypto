@@ -7,22 +7,22 @@ import (
 )
 
 type DiffieHellmanAlgo struct {
-	p *big.Int
-	g *big.Int
+	P *big.Int
+	G *big.Int
 }
 
 func InitDiffieHellman(p, g int) *DiffieHellmanAlgo {
 	return &DiffieHellmanAlgo{
-		p: big.NewInt(int64(p)),
-		g: big.NewInt(int64(g)),
+		P: big.NewInt(int64(p)),
+		G: big.NewInt(int64(g)),
 	}
 }
 
 func (d *DiffieHellmanAlgo) GenerateKeys() string {
-	privateKey, _ := rand.Int(rand.Reader, d.p)
+	privateKey, _ := rand.Int(rand.Reader, d.P)
 	privateKey.Add(privateKey, big.NewInt(2))
 
-	publicKey := new(big.Int).Exp(d.g, privateKey, d.p)
+	publicKey := new(big.Int).Exp(d.G, privateKey, d.P)
 
 	return fmt.Sprintf("Private: %s\nPublic: %s\n", privateKey.String(), publicKey.String())
 }
@@ -31,18 +31,19 @@ func (d *DiffieHellmanAlgo) ComputeSharedSecret(otherPublicKeyFile string) strin
 	otherPublicKey := new(big.Int)
 	otherPublicKey.SetString(otherPublicKeyFile, 10)
 
-	privateKey, _ := rand.Int(rand.Reader, d.p)
+	privateKey, _ := rand.Int(rand.Reader, d.P)
 	privateKey.Add(privateKey, big.NewInt(2))
 
-	publicKey := new(big.Int).Exp(d.g, privateKey, d.p)
+	publicKey := new(big.Int).Exp(d.G, privateKey, d.P)
 
-	sharedSecret := new(big.Int).Exp(otherPublicKey, privateKey, d.p)
+	sharedSecret := new(big.Int).Exp(otherPublicKey, privateKey, d.P)
 
 	return fmt.Sprintf("Private: %s\nPublic: %s\nShared Secret: %s\n", privateKey.String(), publicKey.String(), sharedSecret.String())
 }
 
-func (d *DiffieHellmanAlgo) GeneratePrimeAndGenerator(primeSize int) (p, g *big.Int) {
-	p, _ = rand.Prime(rand.Reader, primeSize)
-	g = big.NewInt(2)
-	return
+func (d *DiffieHellmanAlgo) GeneratePrimeAndGenerator(primeSize int) *big.Int {
+	p, _ := rand.Prime(rand.Reader, primeSize)
+	d.P = p
+	d.G = big.NewInt(2)
+	return p
 }

@@ -1,151 +1,372 @@
 {{define "tp3"}}
-<div class="space-y-12">
-    
-    <!-- Diffie-Hellman Playground -->
-    <section class="cyber-panel p-8 rounded-2xl">
-        <h3 class="text-2xl font-bold text-green-500 mb-8">Diffie-Hellman Playground</h3>
-        
-        <form action="/tp3/dh" method="POST" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 items-end">
-            <div>
-                <label class="block text-xs font-semibold text-gray-500 uppercase mb-2">Prime (p)</label>
-                <input type="text" name="p" value="{{if .DHResult}}{{.DHResult.p}}{{else}}23{{end}}" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm outline-none focus:border-green-500">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-gray-500 uppercase mb-2">Generator (g)</label>
-                <input type="text" name="g" value="{{if .DHResult}}{{.DHResult.g}}{{else}}5{{end}}" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm outline-none focus:border-green-500">
-            </div>
-            <div class="flex items-center space-x-3 pb-3">
-                <input type="checkbox" name="mitm" id="mitm" {{if .MitMActive}}checked{{end}} class="w-4 h-4 rounded border-gray-700 bg-gray-900 text-red-500 focus:ring-red-500">
-                <label for="mitm" class="text-sm font-medium text-red-400">Enable MitM (Mallory)</label>
-            </div>
-            <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg transition-all shadow-lg shadow-green-900/20">
-                Generate Keys
-            </button>
-        </form>
+<div class="space-y-8">
 
-        {{if .DHResult}}
-        <div class="relative">
-            <!-- Exchange Diagram -->
-            <div class="grid grid-cols-3 gap-8 items-start">
-                
-                <!-- Alice -->
+    <div class="flex space-x-2 border-b border-gray-700 pb-2">
+        <button onclick="showTab('dh')" class="tab-btn px-4 py-2 rounded-t-lg {{if eq .ActiveSubTab "dh"}}bg-green-600 text-white{{else}}bg-gray-800 text-gray-400{{end}}" data-tab="dh">Diffie-Hellman & MitM</button>
+        <button onclick="showTab('hybrid')" class="tab-btn px-4 py-2 rounded-t-lg {{if eq .ActiveSubTab "hybrid"}}bg-green-600 text-white{{else}}bg-gray-800 text-gray-400{{end}}" data-tab="hybrid">RSA Hybrid Lab</button>
+        <button onclick="showTab('elgamal')" class="tab-btn px-4 py-2 rounded-t-lg {{if eq .ActiveSubTab "elgamal"}}bg-green-600 text-white{{else}}bg-gray-800 text-gray-400{{end}}" data-tab="elgamal">ElGamal</button>
+        <button onclick="showTab('ecc')" class="tab-btn px-4 py-2 rounded-t-lg {{if eq .ActiveSubTab "ecc"}}bg-green-600 text-white{{else}}bg-gray-800 text-gray-400{{end}}" data-tab="ecc">ECC Playground</button>
+    </div>
+
+    <!-- Diffie-Hellman Tab -->
+    <div id="dh-tab" class="tab-content {{if or (not .ActiveSubTab) (eq .ActiveSubTab "dh")}}block{{else}}hidden{{end}}">
+        <section class="cyber-panel p-8 rounded-2xl">
+            <h3 class="text-2xl font-bold text-green-500 mb-8">Diffie-Hellman Key Exchange & MitM</h3>
+
+            <form action="/tp3/dh" method="POST" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 items-end">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-2">Prime (p)</label>
+                    <input type="text" name="p" value="{{if .DHResult}}{{.DHResult.p}}{{else}}23{{end}}" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm outline-none focus:border-green-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-2">Generator (g)</label>
+                    <input type="text" name="g" value="{{if .DHResult}}{{.DHResult.g}}{{else}}5{{end}}" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm outline-none focus:border-green-500">
+                </div>
+                <div class="flex items-center space-x-3 pb-3">
+                    <input type="checkbox" name="mitm" id="mitm" {{if .MitMActive}}checked{{end}} class="w-4 h-4 rounded border-gray-700 bg-gray-900 text-red-500 focus:ring-red-500">
+                    <label for="mitm" class="text-sm font-medium text-red-400">Enable MitM</label>
+                </div>
+                <div class="flex space-x-2">
+                    <button type="submit" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg transition-all">
+                        Generate
+                    </button>
+                </div>
+            </form>
+
+            <form action="/tp3/dh-large" method="POST" class="mb-6">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold">
+                    Generate Large Prime (512-bit)
+                </button>
+            </form>
+
+            <div class="flex items-center space-x-3 mb-6">
+                <input type="checkbox" name="signatures" id="signatures" {{if .UseSignatures}}checked{{end}} class="w-4 h-4 rounded border-gray-700 bg-gray-900 text-green-500 focus:ring-green-500">
+                <label for="signatures" class="text-sm font-medium text-green-400">Enable ECDSA Signatures (Defense)</label>
+            </div>
+
+            {{if .DHResult}}
+            <div class="grid grid-cols-3 gap-6 mb-8">
                 <div class="cyber-panel p-4 rounded-xl border-green-500/30 text-center">
-                    <span class="text-3xl mb-2 block">👩‍💻 Alice</span>
-                    <div class="text-left space-y-2 mt-4">
-                        <div class="text-[10px] text-gray-500 uppercase">Private (a)</div>
-                        <div class="bg-black/40 p-2 rounded border border-gray-800 font-mono text-xs">{{.DHResult.a}}</div>
-                        <div class="text-[10px] text-gray-500 uppercase">Public (A = g^a mod p)</div>
-                        <div class="bg-green-900/20 p-2 rounded border border-green-500/30 font-mono text-xs text-green-400">{{.DHResult.A}}</div>
+                    <span class="text-2xl mb-2 block">👩‍💻 Alice</span>
+                    <div class="text-left space-y-2 mt-4 text-xs">
+                        <div class="text-gray-500 uppercase">Private (a)</div>
+                        <div class="bg-black/40 p-2 rounded font-mono break-all">{{.DHResult.Alice.Private}}</div>
+                        <div class="text-gray-500 uppercase mt-2">Public (A)</div>
+                        <div class="bg-green-900/20 p-2 rounded font-mono break-all text-green-400">{{.DHResult.Alice.Public}}</div>
                     </div>
                 </div>
 
-                <!-- Mallory / Channel -->
-                <div class="flex flex-col items-center justify-center space-y-8 py-10">
-                    {{if .MitMActive}}
-                    <div class="cyber-panel p-4 rounded-xl border-red-500/50 text-center w-full z-10">
-                        <span class="text-3xl mb-2 block">🦹 Mallory</span>
-                        <div class="text-left space-y-2 mt-4">
-                            <div class="text-[10px] text-gray-500 uppercase">Mallory's Private (m)</div>
-                            <div class="bg-black/40 p-2 rounded border border-gray-800 font-mono text-xs">{{.DHResult.m}}</div>
-                            <div class="text-[10px] text-gray-500 uppercase">Mallory's Public (M)</div>
-                            <div class="bg-red-900/20 p-2 rounded border border-red-500/30 font-mono text-xs text-red-400">{{.DHResult.M}}</div>
-                        </div>
+                <div class="cyber-panel p-4 rounded-xl border-red-500/50 text-center">
+                    <span class="text-2xl mb-2 block">🦹 Mallory</span>
+                    {{if .DHResult.Mallory}}
+                    <div class="text-left space-y-2 mt-4 text-xs">
+                        <div class="text-gray-500 uppercase">Private (m)</div>
+                        <div class="bg-black/40 p-2 rounded font-mono break-all">{{.DHResult.Mallory.Private}}</div>
+                        <div class="text-gray-500 uppercase mt-2">Public (M)</div>
+                        <div class="bg-red-900/20 p-2 rounded font-mono break-all text-red-400">{{.DHResult.Mallory.Public}}</div>
                     </div>
                     {{else}}
-                    <div class="text-gray-700 flex flex-col items-center">
-                        <div class="w-px h-20 bg-gray-800 border-dashed border-l"></div>
-                        <span class="text-xs uppercase tracking-widest my-4">Public Channel</span>
-                        <div class="w-px h-20 bg-gray-800 border-dashed border-l"></div>
+                    <p class="text-gray-600 text-sm mt-4">Not active</p>
+                    {{end}}
+                </div>
+
+                <div class="cyber-panel p-4 rounded-xl border-blue-500/30 text-center">
+                    <span class="text-2xl mb-2 block">👨‍💻 Bob</span>
+                    <div class="text-left space-y-2 mt-4 text-xs">
+                        <div class="text-gray-500 uppercase">Private (b)</div>
+                        <div class="bg-black/40 p-2 rounded font-mono break-all">{{.DHResult.Bob.Private}}</div>
+                        <div class="text-gray-500 uppercase mt-2">Public (B)</div>
+                        <div class="bg-blue-900/20 p-2 rounded font-mono break-all text-blue-400">{{.DHResult.Bob.Public}}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-6 mb-6">
+                <div class="bg-black/40 p-6 rounded-2xl border border-gray-800">
+                    <h4 class="text-sm font-bold text-gray-400 uppercase mb-4">Alice's Shared Secret</h4>
+                    <div class="text-xl font-mono {{if .MitMActive}}text-red-400{{else}}text-green-400{{end}} break-all">{{.DHResult.S_alice}}</div>
+                </div>
+                <div class="bg-black/40 p-6 rounded-2xl border border-gray-800">
+                    <h4 class="text-sm font-bold text-gray-400 uppercase mb-4">Bob's Shared Secret</h4>
+                    <div class="text-xl font-mono {{if .MitMActive}}text-red-400{{else}}text-green-400{{end}} break-all">{{.DHResult.S_bob}}</div>
+                </div>
+            </div>
+
+            {{if .DHResult.Logs}}
+            <div class="cyber-panel p-4 rounded-xl">
+                <h4 class="text-sm font-bold text-yellow-500 uppercase mb-4">Live Console</h4>
+                <div class="space-y-1 text-xs font-mono text-gray-400 max-h-48 overflow-y-auto">
+                    {{range .DHResult.Logs}}
+                    <div>{{.}}</div>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+
+            {{if .DHResult.Secure}}
+            <div class="mt-6 p-4 bg-green-900/20 border border-green-500/30 rounded-xl">
+                <span class="text-green-400 font-bold">✓ SECURE: ECDSA signatures enabled - MitM attack prevented!</span>
+            </div>
+            {{end}}
+            {{end}}
+        </section>
+    </div>
+
+    <!-- RSA Hybrid Tab -->
+    <div id="hybrid-tab" class="tab-content {{if eq .ActiveSubTab "hybrid"}}block{{else}}hidden{{end}}">
+        <section class="cyber-panel p-8 rounded-2xl">
+            <h3 class="text-2xl font-bold text-green-500 mb-8">RSA-AES Hybrid Encryption</h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="space-y-4">
+                    <h4 class="text-sm font-bold text-gray-400 uppercase">1. Generate RSA Keys</h4>
+                    <form action="/tp3/rsa-keygen" method="POST" class="space-y-4">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-2">Key Size</label>
+                            <select name="bits" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm">
+                                <option value="512">512 bits</option>
+                                <option value="1024">1024 bits</option>
+                                <option value="2048" selected>2048 bits</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg">
+                            Generate Keys
+                        </button>
+                    </form>
+                    {{if .RSAKeys}}
+                    <div class="bg-black/40 p-4 rounded-lg text-xs font-mono break-all text-gray-400">
+                        <div class="text-green-500 mb-2">Public Key (N):</div>
+                        {{.RSAKeys.PublicN}}
+                        <div class="text-green-500 mt-4 mb-2">Private Key (D):</div>
+                        {{.RSAKeys.PrivateD}}
                     </div>
                     {{end}}
                 </div>
 
-                <!-- Bob -->
-                <div class="cyber-panel p-4 rounded-xl border-blue-500/30 text-center">
-                    <span class="text-3xl mb-2 block">👨‍💻 Bob</span>
-                    <div class="text-left space-y-2 mt-4">
-                        <div class="text-[10px] text-gray-500 uppercase">Private (b)</div>
-                        <div class="bg-black/40 p-2 rounded border border-gray-800 font-mono text-xs">{{.DHResult.b}}</div>
-                        <div class="text-[10px] text-gray-500 uppercase">Public (B = g^b mod p)</div>
-                        <div class="bg-blue-900/20 p-2 rounded border border-blue-500/30 font-mono text-xs text-blue-400">{{.DHResult.B}}</div>
-                    </div>
+                <div class="space-y-4">
+                    <h4 class="text-sm font-bold text-gray-400 uppercase">2. Encrypt File</h4>
+                    <form action="/tp3/hybrid-encrypt" method="POST" enctype="multipart/form-data" class="space-y-4">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-2">Upload File (max 1MB)</label>
+                            <input type="file" name="file" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-2">Public Key (N)</label>
+                            <input type="text" name="pubkey" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-xs font-mono" placeholder="Enter RSA public key N">
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg">
+                            Hybrid Encrypt
+                        </button>
+                    </form>
+                </div>
+
+                <div class="space-y-4">
+                    <h4 class="text-sm font-bold text-gray-400 uppercase">3. Decrypt File</h4>
+                    <form action="/tp3/hybrid-decrypt" method="POST" enctype="multipart/form-data" class="space-y-4">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-2">Encrypted File</label>
+                            <input type="file" name="encrypted" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-2">Session Key (AES)</label>
+                            <input type="text" name="sessionkey" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-xs font-mono" placeholder="Hex session key">
+                        </div>
+                        <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg">
+                            Hybrid Decrypt
+                        </button>
+                    </form>
                 </div>
             </div>
 
-            <!-- Result Secrets -->
-            <div class="mt-12 grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div class="bg-black/40 p-6 rounded-2xl border border-gray-800">
-                    <h4 class="text-sm font-bold text-gray-400 uppercase mb-4">Alice's Shared Secret</h4>
-                    <div class="text-3xl font-mono {{if .MitMActive}}text-red-400{{else}}text-green-400{{end}}">{{.DHResult.s_alice}}</div>
-                    <p class="text-xs text-gray-600 mt-2">
-                        {{if .MitMActive}}
-                        Computed using Mallory's M: s = M^a mod p
-                        {{else}}
-                        Computed using Bob's B: s = B^a mod p
-                        {{end}}
-                    </p>
-                </div>
-                <div class="bg-black/40 p-6 rounded-2xl border border-gray-800">
-                    <h4 class="text-sm font-bold text-gray-400 uppercase mb-4">Bob's Shared Secret</h4>
-                    <div class="text-3xl font-mono {{if .MitMActive}}text-red-400{{else}}text-green-400{{end}}">{{.DHResult.s_bob}}</div>
-                    <p class="text-xs text-gray-600 mt-2">
-                        {{if .MitMActive}}
-                        Computed using Mallory's M: s = M^b mod p
-                        {{else}}
-                        Computed using Alice's A: s = A^b mod p
-                        {{end}}
-                    </p>
-                </div>
-            </div>
-
-            {{if .MitMActive}}
-            <div class="mt-8 p-6 bg-red-900/10 border border-red-500/30 rounded-2xl">
-                <h4 class="text-sm font-bold text-red-400 uppercase mb-4">Mallory's Success</h4>
+            <div class="mt-8">
+                <h4 class="text-sm font-bold text-gray-400 uppercase mb-4">Performance Benchmark</h4>
+                <form action="/tp3/benchmark" method="POST" class="flex items-center space-x-4 mb-4">
+                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold">
+                        Run Benchmark (1MB file)
+                    </button>
+                </form>
+                {{if .HybridBenchmark}}
                 <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <span class="text-[10px] text-gray-500 block uppercase mb-1">Secret with Alice</span>
-                        <div class="text-xl font-mono text-red-500">{{.DHResult.s_mallory_alice}}</div>
+                    <div class="bg-black/40 p-4 rounded-xl border border-gray-800">
+                        <div class="text-xs text-gray-500 uppercase mb-2">RSA Direct</div>
+                        <div class="text-2xl text-red-400 font-bold">{{.HybridBenchmark.RSA}} ms</div>
                     </div>
-                    <div>
-                        <span class="text-[10px] text-gray-500 block uppercase mb-1">Secret with Bob</span>
-                        <div class="text-xl font-mono text-red-500">{{.DHResult.s_mallory_bob}}</div>
+                    <div class="bg-black/40 p-4 rounded-xl border border-gray-800">
+                        <div class="text-xs text-gray-500 uppercase mb-2">Hybrid (RSA+AES)</div>
+                        <div class="text-2xl text-green-400 font-bold">{{.HybridBenchmark.Hybrid}} ms</div>
                     </div>
                 </div>
-                <p class="text-xs text-gray-500 mt-4 italic">Mallory can now decrypt messages from Alice and re-encrypt them for Bob!</p>
+                {{end}}
             </div>
-            {{end}}
-        </div>
-        {{end}}
-    </section>
+        </section>
+    </div>
 
-    <!-- Hybrid RSA-AES Wizard -->
-    <section class="cyber-panel p-8 rounded-2xl">
-        <h3 class="text-xl font-bold text-green-500 mb-6">Hybrid RSA-AES Wizard</h3>
-        <div class="flex flex-col md:flex-row items-center justify-between space-y-6 md:space-y-0 md:space-x-4">
-            <div class="flex flex-col items-center space-y-2">
-                <div class="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center border border-gray-700">📄</div>
-                <span class="text-[10px] text-gray-500 uppercase">Large File</span>
+    <!-- ElGamal Tab -->
+    <div id="elgamal-tab" class="tab-content {{if eq .ActiveSubTab "elgamal"}}block{{else}}hidden{{end}}">
+        <section class="cyber-panel p-8 rounded-2xl">
+            <h3 class="text-2xl font-bold text-green-500 mb-8">ElGamal Cryptosystem & Attacks</h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="space-y-6">
+                    <h4 class="text-lg font-bold text-gray-400">Non-Determinism Visualizer</h4>
+                    <form action="/tp3/elgamal-encrypt" method="POST" class="space-y-4">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-2">Prime (p)</label>
+                            <input type="text" name="p" value="{{if .ElGamalResult}}{{.ElGamalResult.p}}{{else}}23{{end}}" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-2">Generator (g)</label>
+                            <input type="text" name="g" value="{{if .ElGamalResult}}{{.ElGamalResult.g}}{{else}}5{{end}}" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-2">Message (number)</label>
+                            <input type="text" name="message" value="5" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm">
+                        </div>
+                        <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg">
+                            Encrypt (Same Message Twice)
+                        </button>
+                    </form>
+
+                    {{if .ElGamalResult}}
+                    <div class="bg-black/40 p-4 rounded-xl border border-gray-800">
+                        <div class="text-xs text-green-500 uppercase mb-2">Encryption 1</div>
+                        <div class="font-mono text-sm text-gray-300 break-all">C1: {{.ElGamalResult.C1_1}}</div>
+                        <div class="font-mono text-sm text-gray-300 break-all">C2: {{.ElGamalResult.C2_1}}</div>
+                    </div>
+                    <div class="bg-black/40 p-4 rounded-xl border border-gray-800">
+                        <div class="text-xs text-blue-500 uppercase mb-2">Encryption 2 (different!)</div>
+                        <div class="font-mono text-sm text-gray-300 break-all">C1: {{.ElGamalResult.C1_2}}</div>
+                        <div class="font-mono text-sm text-gray-300 break-all">C2: {{.ElGamalResult.C2_2}}</div>
+                    </div>
+                    <p class="text-xs text-gray-500">Same message, different ciphertexts due to random k!</p>
+                    {{end}}
+                </div>
+
+                <div class="space-y-6">
+                    <h4 class="text-lg font-bold text-red-400">Malleability Attack (Forgery)</h4>
+                    <form action="/tp3/elgamal-forge" method="POST" class="space-y-4">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-2">Original C1</label>
+                            <input type="text" name="c1" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm font-mono" placeholder="Enter C1">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-2">Original C2</label>
+                            <input type="text" name="c2" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm font-mono" placeholder="Enter C2">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-2">Multiplier</label>
+                            <input type="text" name="multiplier" value="2" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm">
+                        </div>
+                        <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-lg">
+                            Forge Ciphertext (E(k*M))
+                        </button>
+                    </form>
+
+                    {{if .ElGamalForge}}
+                    <div class="bg-red-900/20 p-4 rounded-xl border border-red-500/30">
+                        <div class="text-xs text-red-400 uppercase mb-2">Original Message</div>
+                        <div class="text-lg font-mono text-white">{{.ElGamalForge.OriginalMsg}}</div>
+                    </div>
+                    <div class="bg-green-900/20 p-4 rounded-xl border border-green-500/30">
+                        <div class="text-xs text-green-400 uppercase mb-2">Forged Ciphertext Decrypted</div>
+                        <div class="text-lg font-mono text-white">{{.ElGamalForge.ForgedMsg}}</div>
+                    </div>
+                    <p class="text-xs text-gray-500">Without knowing the private key, we changed the message!</p>
+                    {{end}}
+                </div>
             </div>
-            <div class="text-gray-700">→</div>
-            <div class="flex flex-col items-center space-y-2">
-                <div class="w-12 h-12 bg-green-900/20 rounded-full flex items-center justify-center border border-green-500/50 text-green-400">AES</div>
-                <span class="text-[10px] text-gray-500 uppercase">Fast Encryption</span>
+        </section>
+    </div>
+
+    <!-- ECC Tab -->
+    <div id="ecc-tab" class="tab-content {{if eq .ActiveSubTab "ecc"}}block{{else}}hidden{{end}}">
+        <section class="cyber-panel p-8 rounded-2xl">
+            <h3 class="text-2xl font-bold text-green-500 mb-8">ECC Playground</h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="space-y-6">
+                    <h4 class="text-lg font-bold text-gray-400">Point Operations (y² = x³ + 7 mod 97)</h4>
+                    <form action="/tp3/ecc-point" method="POST" class="space-y-4">
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-2">Point P (x,y)</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" name="px" value="5" class="bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm" placeholder="x">
+                                <input type="text" name="py" value="12" class="bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm" placeholder="y">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-500 mb-2">Scalar k</label>
+                            <input type="text" name="k" value="3" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm">
+                        </div>
+                        <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg">
+                            Compute Q = k*P
+                        </button>
+                    </form>
+
+                    {{if .ECCResult}}
+                    <div class="bg-black/40 p-4 rounded-xl border border-gray-800">
+                        <div class="text-xs text-gray-500 uppercase mb-2">Result</div>
+                        <div class="font-mono text-lg text-green-400">Q = ({{.ECCResult.Qx}}, {{.ECCResult.Qy}})</div>
+                        {{if .ECCResult.Logs}}
+                        <div class="mt-4 text-xs text-gray-500 space-y-1">
+                            {{range .ECCResult.Logs}}
+                            <div>{{.}}</div>
+                            {{end}}
+                        </div>
+                        {{end}}
+                    </div>
+                    {{end}}
+                </div>
+
+                <div class="space-y-6">
+                    <h4 class="text-lg font-bold text-blue-400">ECDH Key Exchange (P-256)</h4>
+                    <form action="/tp3/ecdh" method="POST" class="space-y-4">
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg">
+                            Run ECDH Exchange
+                        </button>
+                    </form>
+
+                    {{if .ECDHResult}}
+                    <div class="space-y-4">
+                        <div class="bg-black/40 p-4 rounded-xl border border-gray-800">
+                            <div class="text-xs text-gray-500 uppercase mb-2">Alice's Key Pair</div>
+                            <div class="text-sm text-green-400 font-mono">Private: {{.ECDHResult.AlicePrivate}}</div>
+                            <div class="text-sm text-green-400 font-mono break-all">Public: ({{.ECDHResult.AlicePublicX}}, {{.ECDHResult.AlicePublicY}})</div>
+                        </div>
+                        <div class="bg-black/40 p-4 rounded-xl border border-gray-800">
+                            <div class="text-xs text-gray-500 uppercase mb-2">Bob's Key Pair</div>
+                            <div class="text-sm text-blue-400 font-mono">Private: {{.ECDHResult.BobPrivate}}</div>
+                            <div class="text-sm text-blue-400 font-mono break-all">Public: ({{.ECDHResult.BobPublicX}}, {{.ECDHResult.BobPublicY}})</div>
+                        </div>
+                        <div class="bg-green-900/20 p-4 rounded-xl border border-green-500/30">
+                            <div class="text-xs text-green-400 uppercase mb-2">Shared Secret</div>
+                            <div class="font-mono text-sm break-all text-white">{{.ECDHResult.SharedSecret}}</div>
+                        </div>
+                        <div class="bg-purple-900/20 p-4 rounded-xl border border-purple-500/30">
+                            <div class="text-xs text-purple-400 uppercase mb-2">AES-256 Key (SHA-256 of shared secret)</div>
+                            <div class="font-mono text-sm break-all text-white">{{.ECDHAESKey}}</div>
+                        </div>
+                    </div>
+                    {{end}}
+                </div>
             </div>
-            <div class="text-gray-700">+</div>
-            <div class="flex flex-col items-center space-y-2">
-                <div class="w-12 h-12 bg-blue-900/20 rounded-full flex items-center justify-center border border-blue-500/50 text-blue-400">RSA</div>
-                <span class="text-[10px] text-gray-500 uppercase">Key Wrapping</span>
-            </div>
-            <div class="text-gray-700">→</div>
-            <div class="flex flex-col items-center space-y-2">
-                <div class="w-12 h-12 bg-black/40 rounded-full flex items-center justify-center border border-gray-700">📦</div>
-                <span class="text-[10px] text-gray-500 uppercase">Secure Package</span>
-            </div>
-        </div>
-        <button disabled class="w-full mt-8 bg-gray-800 text-gray-600 cursor-not-allowed py-3 rounded-lg text-sm font-bold">
-            Interactive Hybrid Flow (Coming Soon)
-        </button>
-    </section>
+        </section>
+    </div>
 
 </div>
+
+<script>
+    function showTab(tab) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+        document.querySelectorAll('.tab-btn').forEach(el => {
+            el.classList.remove('bg-green-600', 'text-white');
+            el.classList.add('bg-gray-800', 'text-gray-400');
+        });
+        document.getElementById(tab + '-tab').classList.remove('hidden');
+        document.querySelector('[data-tab="' + tab + '"]').classList.add('bg-green-600', 'text-white');
+        document.querySelector('[data-tab="' + tab + '"]').classList.remove('bg-gray-800', 'text-gray-400');
+
+        fetch('/tp3/tab?tab=' + tab, {method: 'POST'});
+    }
+</script>
 {{end}}

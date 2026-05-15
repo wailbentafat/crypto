@@ -1,16 +1,14 @@
 package web
 
 import (
-	"crypto/internal/AES"
-	"crypto/internal/Caesar"
-	"crypto/internal/Hill"
-	"crypto/internal/OTP"
-	"crypto/internal/Vigenere"
-	"crypto/internal/analyzer"
-	"crypto/md5"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/sha512"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"io"
@@ -21,12 +19,24 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	internalaes "crypto/internal/AES"
+	"crypto/internal/Caesar"
+	"crypto/internal/DiffieHellman"
+	"crypto/internal/ElGamal"
+	"crypto/internal/Hill"
+	"crypto/internal/OTP"
+	"crypto/internal/Vigenere"
+	"crypto/internal/analyzer"
+	"crypto/md5"
+	"crypto/sha512"
 )
 
 // PageData represents the data passed to templates.
 type PageData struct {
 	Title         string
 	ActiveTab     string
+	ActiveSubTab  string
 	Result        *analyzer.AnalysisResult
 	Error         string
 	InputText     string
@@ -45,15 +55,63 @@ type PageData struct {
 	Avalanche     float64
 	Benchmarks    map[string]float64
 	// TP3
-	DHResult   map[string]string
-	MitMActive bool
-	HybridStep int
+	DHResult        map[string]interface{}
+	MitMActive      bool
+	UseSignatures   bool
+	HybridStep      int
+	RSAKeys         *RSAKeyPair
+	HybridBenchmark *BenchmarkResult
+	ElGamalResult   *ElGamalEncryptResult
+	ElGamalForge    *ElGamalForgeResult
+	ECCResult       *ECCResult
+	ECDHResult      *ECDHResult
+	ECDHAESKey      string
 	// TP4
 	Hashes   map[string]string
 	HashAval float64
 	// TP6
 	ChatLog []string
 	VoteRes map[string]int
+}
+
+type RSAKeyPair struct {
+	PublicN  string
+	PrivateD string
+}
+
+type BenchmarkResult struct {
+	Hybrid float64
+	RSA    float64
+}
+
+type ElGamalEncryptResult struct {
+	p    string
+	g    string
+	C1_1 string
+	C2_1 string
+	C1_2 string
+	C2_2 string
+}
+
+type ElGamalForgeResult struct {
+	OriginalMsg string
+	ForgedMsg   string
+}
+
+type ECCResult struct {
+	Qx   string
+	Qy   string
+	Logs []string
+}
+
+type ECDHResult struct {
+	AlicePrivate string
+	AlicePublicX string
+	AlicePublicY string
+	BobPrivate   string
+	BobPublicX   string
+	BobPublicY   string
+	SharedSecret string
 }
 
 var templates = template.Must(template.ParseGlob("templates/*.html"))
@@ -243,7 +301,7 @@ func ImageUploadHandler(w http.ResponseWriter, r *http.Request) {
 		os.WriteFile(origPath, imgData, 0644)
 		log.Printf("Saved original to %s", origPath)
 
-		aesAlgo, _ := aes.InitAES("mysecretkey12345")
+		aesAlgo, _ := internalaes.InitAES("mysecretkey12345")
 
 		pixelData := imgData[8:]
 		paddedPixels := make([]byte, ((len(pixelData)/16)+1)*16)
@@ -298,7 +356,7 @@ func BenchmarkHandler(w http.ResponseWriter, r *http.Request) {
 
 	benchmarks := make(map[string]float64)
 
-	aesAlgo, _ := aes.InitAES(key)
+	aesAlgo, _ := internalaes.InitAES(key)
 	start := time.Now()
 	aesAlgo.EncryptECB(payload)
 	benchmarks["AES"] = float64(time.Since(start).Milliseconds())
@@ -333,7 +391,7 @@ func AvalancheHandler(w http.ResponseWriter, r *http.Request) {
 		data2[0] ^= 1
 	}
 
-	aesAlgo, _ := aes.InitAES("1234567890123456")
+	aesAlgo, _ := internalaes.InitAES("1234567890123456")
 	enc1 := aesAlgo.EncryptECB(data1)
 	enc2 := aesAlgo.EncryptECB(data2)
 
@@ -352,10 +410,28 @@ func AvalancheHandler(w http.ResponseWriter, r *http.Request) {
 
 func TP3Handler(w http.ResponseWriter, r *http.Request) {
 	data := PageData{
-		Title:     "TP 3: Asymmetric & MitM Lab",
-		ActiveTab: "tp3",
+		Title:        "TP 3: Asymmetric & MitM Lab",
+		ActiveTab:    "tp3",
+		ActiveSubTab: "dh",
 	}
 	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+func TP3TabHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		r.ParseForm()
+		tab := r.FormValue("tab")
+		if tab != "" {
+			data := PageData{
+				Title:        "TP 3: Asymmetric & MitM Lab",
+				ActiveTab:    "tp3",
+				ActiveSubTab: tab,
+			}
+			templates.ExecuteTemplate(w, "base.html", data)
+			return
+		}
+	}
+	http.Redirect(w, r, "/tp3", http.StatusSeeOther)
 }
 
 func DHHandler(w http.ResponseWriter, r *http.Request) {
@@ -367,6 +443,7 @@ func DHHandler(w http.ResponseWriter, r *http.Request) {
 	pStr := r.FormValue("p")
 	gStr := r.FormValue("g")
 	mitm := r.FormValue("mitm") == "on"
+	useSigs := r.FormValue("signatures") == "on"
 
 	p, _ := new(big.Int).SetString(pStr, 10)
 	g, _ := new(big.Int).SetString(gStr, 10)
@@ -376,43 +453,531 @@ func DHHandler(w http.ResponseWriter, r *http.Request) {
 		g = big.NewInt(5)
 	}
 
-	a, _ := rand.Int(rand.Reader, p)
-	A := new(big.Int).Exp(g, a, p)
+	dh := diffiehellman.InitDiffieHellman(23, 5)
 
-	b, _ := rand.Int(rand.Reader, p)
-	B := new(big.Int).Exp(g, b, p)
-
-	res := make(map[string]string)
-	res["p"] = p.String()
-	res["g"] = g.String()
-	res["a"] = a.String()
-	res["A"] = A.String()
-	res["b"] = b.String()
-	res["B"] = B.String()
+	var result map[string]interface{}
 
 	if mitm {
-		m, _ := rand.Int(rand.Reader, p)
-		M := new(big.Int).Exp(g, m, p)
-		res["m"] = m.String()
-		res["M"] = M.String()
-		s_am := new(big.Int).Exp(M, a, p)
-		s_bm := new(big.Int).Exp(M, b, p)
-		res["s_alice"] = s_am.String()
-		res["s_bob"] = s_bm.String()
-		res["s_mallory_alice"] = new(big.Int).Exp(A, m, p).String()
-		res["s_mallory_bob"] = new(big.Int).Exp(B, m, p).String()
+		result = runDHWithMitM(dh, useSigs)
 	} else {
-		s_ab := new(big.Int).Exp(B, a, p)
-		s_ba := new(big.Int).Exp(A, b, p)
-		res["s_alice"] = s_ab.String()
-		res["s_bob"] = s_ba.String()
+		result = runDHSecure(dh, useSigs)
 	}
 
 	data := PageData{
-		Title:      "TP 3: Asymmetric & MitM Lab",
-		ActiveTab:  "tp3",
-		DHResult:   res,
-		MitMActive: mitm,
+		Title:         "TP 3: Asymmetric & MitM Lab",
+		ActiveTab:     "tp3",
+		ActiveSubTab:  "dh",
+		DHResult:      result,
+		MitMActive:    mitm,
+		UseSignatures: useSigs,
+	}
+
+	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+func DHLargeHandler(w http.ResponseWriter, r *http.Request) {
+	p, _ := rand.Prime(rand.Reader, 512)
+	g := big.NewInt(2)
+
+	dh := &diffiehellman.DiffieHellmanAlgo{
+		P: p,
+		G: g,
+	}
+
+	result := runDHSecure(dh, false)
+
+	data := PageData{
+		Title:        "TP 3: Asymmetric & MitM Lab",
+		ActiveTab:    "tp3",
+		ActiveSubTab: "dh",
+		DHResult:     result,
+	}
+
+	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+func runDHSecure(dh *diffiehellman.DiffieHellmanAlgo, withSigs bool) map[string]interface{} {
+	p := dh.GeneratePrimeAndGenerator(512)
+	dh = diffiehellman.InitDiffieHellman(int(p.BitLen()), 2)
+
+	alicePriv, _ := rand.Int(rand.Reader, dh.P)
+	alicePriv.Add(alicePriv, big.NewInt(2))
+	alicePub := new(big.Int).Exp(dh.G, alicePriv, dh.P)
+
+	bobPriv, _ := rand.Int(rand.Reader, dh.P)
+	bobPriv.Add(bobPriv, big.NewInt(2))
+	bobPub := new(big.Int).Exp(dh.G, bobPriv, dh.P)
+
+	sharedAlice := new(big.Int).Exp(bobPub, alicePriv, dh.P)
+	sharedBob := new(big.Int).Exp(alicePub, bobPriv, dh.P)
+
+	aliceStr := sharedAlice.String()
+	bobStr := sharedBob.String()
+	if len(aliceStr) > 20 {
+		aliceStr = aliceStr[:20]
+	}
+	if len(bobStr) > 20 {
+		bobStr = bobStr[:20]
+	}
+
+	logs := []string{
+		fmt.Sprintf("DH with p=%d-bit prime", p.BitLen()),
+		fmt.Sprintf("Alice computes: A = g^a mod p"),
+		fmt.Sprintf("Bob computes: B = g^b mod p"),
+		fmt.Sprintf("Alice shared secret: %s...", aliceStr),
+		fmt.Sprintf("Bob shared secret: %s...", bobStr),
+	}
+
+	if withSigs {
+		logs = append(logs, "ECDSA signatures would secure this exchange")
+	}
+
+	result := map[string]interface{}{
+		"p":    dh.P.String(),
+		"g":    dh.G.String(),
+		"Alice": map[string]string{
+			"Private": alicePriv.String(),
+			"Public":  alicePub.String(),
+		},
+		"Bob": map[string]string{
+			"Private": bobPriv.String(),
+			"Public":  bobPub.String(),
+		},
+		"s_alice": sharedAlice.String(),
+		"s_bob":   sharedBob.String(),
+		"Secure":  withSigs,
+		"Logs":    logs,
+	}
+
+	return result
+}
+
+func runDHWithMitM(dh *diffiehellman.DiffieHellmanAlgo, withSigs bool) map[string]interface{} {
+	p := dh.GeneratePrimeAndGenerator(512)
+	dh = diffiehellman.InitDiffieHellman(int(p.BitLen()), 2)
+
+	alicePriv, _ := rand.Int(rand.Reader, dh.P)
+	alicePriv.Add(alicePriv, big.NewInt(2))
+	alicePub := new(big.Int).Exp(dh.G, alicePriv, dh.P)
+
+	bobPriv, _ := rand.Int(rand.Reader, dh.P)
+	bobPriv.Add(bobPriv, big.NewInt(2))
+	bobPub := new(big.Int).Exp(dh.G, bobPriv, dh.P)
+
+	malloryPriv, _ := rand.Int(rand.Reader, dh.P)
+	malloryPriv.Add(malloryPriv, big.NewInt(2))
+	malloryPub := new(big.Int).Exp(dh.G, malloryPriv, dh.P)
+
+	s_alice := new(big.Int).Exp(malloryPub, alicePriv, dh.P)
+	s_bob := new(big.Int).Exp(malloryPub, bobPriv, dh.P)
+	s_mal_alice := new(big.Int).Exp(alicePub, malloryPriv, dh.P)
+	s_mal_bob := new(big.Int).Exp(bobPub, malloryPriv, dh.P)
+
+	aliceMStr := s_alice.String()
+	bobMStr := s_bob.String()
+	if len(aliceMStr) > 20 {
+		aliceMStr = aliceMStr[:20]
+	}
+	if len(bobMStr) > 20 {
+		bobMStr = bobMStr[:20]
+	}
+
+	logs := []string{
+		"⚠️ MITM ATTACK IN PROGRESS",
+		"Mallory intercepts A from Alice",
+		"Mallory intercepts B from Bob",
+		"Mallory replaces both with M = g^m mod p",
+		fmt.Sprintf("Alice computes: s = M^a = %s...", aliceMStr),
+		fmt.Sprintf("Bob computes: s = M^b = %s...", bobMStr),
+		"🚨 Mallory can now decrypt all traffic!",
+	}
+
+	if withSigs {
+		logs = append(logs, "✓ ECDSA signatures would prevent this attack!")
+	}
+
+	result := map[string]interface{}{
+		"p":    dh.P.String(),
+		"g":    dh.G.String(),
+		"Alice": map[string]string{
+			"Private": alicePriv.String(),
+			"Public":  alicePub.String(),
+		},
+		"Bob": map[string]string{
+			"Private": bobPriv.String(),
+			"Public":  bobPub.String(),
+		},
+		"Mallory": map[string]string{
+			"Private": malloryPriv.String(),
+			"Public":  malloryPub.String(),
+		},
+		"s_alice":  s_alice.String(),
+		"s_bob":    s_bob.String(),
+		"s_malice": s_mal_alice.String(),
+		"s_mbob":   s_mal_bob.String(),
+		"Secure":   withSigs,
+		"Logs":     logs,
+	}
+
+	return result
+}
+
+// RSA Key Generation
+func RSAKeyGenHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/tp3", http.StatusSeeOther)
+		return
+	}
+
+	bits, _ := strconv.Atoi(r.FormValue("bits"))
+	if bits == 0 {
+		bits = 2048
+	}
+
+	privateKey, err := rsa.GenerateKey(rand.Reader, bits)
+	if err != nil {
+		log.Printf("RSA keygen error: %v", err)
+		http.Redirect(w, r, "/tp3", http.StatusSeeOther)
+		return
+	}
+
+	data := PageData{
+		Title:        "TP 3: Asymmetric & MitM Lab",
+		ActiveTab:    "tp3",
+		ActiveSubTab: "hybrid",
+		RSAKeys: &RSAKeyPair{
+			PublicN:  privateKey.PublicKey.N.String(),
+			PrivateD: privateKey.D.String(),
+		},
+	}
+
+	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+// Hybrid Encryption
+func HybridEncryptHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/tp3", http.StatusSeeOther)
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Redirect(w, r, "/tp3", http.StatusSeeOther)
+		return
+	}
+	defer file.Close()
+
+	fileData, _ := io.ReadAll(file)
+
+	sessionKey := make([]byte, 32)
+	rand.Read(sessionKey)
+
+	block, _ := aes.NewCipher(sessionKey)
+	iv := make([]byte, 16)
+	block.Encrypt(iv, iv)
+	stream := cipher.NewCTR(block, iv)
+	encryptedFile := make([]byte, len(fileData))
+	stream.XORKeyStream(encryptedFile, fileData)
+
+	pubKeyN := r.FormValue("pubkey")
+	if pubKeyN == "" {
+		pubKeyN = "0"
+	}
+
+	n, _ := new(big.Int).SetString(pubKeyN, 10)
+	if n == nil || n.BitLen() < 64 {
+		n = big.NewInt(0)
+	}
+
+	var wrappedKey []byte
+	if n.BitLen() > 0 {
+		pubKey := &rsa.PublicKey{N: n, E: 65537}
+		oaepLabel := []byte("")
+		_ = oaepLabel
+		wrappedKey, _ = rsa.EncryptPKCS1v15(rand.Reader, pubKey, sessionKey)
+	} else {
+		wrappedKey = sessionKey
+	}
+
+	tmpDir := os.TempDir()
+	encFilePath := tmpDir + "/hybrid_encrypted_" + fmt.Sprintf("%d", time.Now().UnixNano())
+	wrappedKeyPath := tmpDir + "/hybrid_key_" + fmt.Sprintf("%d", time.Now().UnixNano())
+
+	os.WriteFile(encFilePath, encryptedFile, 0644)
+	os.WriteFile(wrappedKeyPath, wrappedKey, 0644)
+
+	data := PageData{
+		Title:         "TP 3: Asymmetric & MitM Lab",
+		ActiveTab:     "tp3",
+		ActiveSubTab:  "hybrid",
+		InputText:     "File encrypted! Encrypted: " + encFilePath + ", Key: " + wrappedKeyPath,
+	}
+
+	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+// Hybrid Decrypt
+func HybridDecryptHandler(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/tp3", http.StatusSeeOther)
+}
+
+// Hybrid Benchmark
+func HybridBenchmarkHandler(w http.ResponseWriter, r *http.Request) {
+	payload := make([]byte, 1024*1024)
+	rand.Read(payload)
+
+	sessionKey := make([]byte, 32)
+	rand.Read(sessionKey)
+
+	start := time.Now()
+	block, _ := aes.NewCipher(sessionKey)
+	iv := make([]byte, 16)
+	block.Encrypt(iv, iv)
+	stream := cipher.NewCTR(block, iv)
+	encrypted := make([]byte, len(payload))
+	stream.XORKeyStream(encrypted, payload)
+	hybridTime := float64(time.Since(start).Milliseconds())
+
+	privKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	pubKey := privKey.PublicKey
+
+	start = time.Now()
+	_, _ = rsa.EncryptPKCS1v15(rand.Reader, &pubKey, payload)
+	rsaTime := float64(time.Since(start).Milliseconds())
+
+	data := PageData{
+		Title:         "TP 3: Asymmetric & MitM Lab",
+		ActiveTab:     "tp3",
+		ActiveSubTab:  "hybrid",
+		HybridBenchmark: &BenchmarkResult{
+			Hybrid: hybridTime,
+			RSA:    rsaTime,
+		},
+	}
+
+	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+// ElGamal Encrypt (Non-determinism)
+func ElGamalEncryptHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/tp3", http.StatusSeeOther)
+		return
+	}
+
+	pStr := r.FormValue("p")
+	gStr := r.FormValue("g")
+	msgStr := r.FormValue("message")
+
+	p, _ := strconv.Atoi(pStr)
+	if p == 0 {
+		p = 23
+	}
+	g, _ := strconv.Atoi(gStr)
+	if g == 0 {
+		g = 5
+	}
+	msg, _ := strconv.Atoi(msgStr)
+	if msg == 0 {
+		msg = 5
+	}
+
+	eg := elgamal.InitElGamal(p, g)
+	eg.PrivateKey, _ = rand.Int(rand.Reader, big.NewInt(int64(p)))
+	eg.PublicKey = new(big.Int).Exp(big.NewInt(int64(g)), eg.PrivateKey, big.NewInt(int64(p)))
+
+	c1_1, c2_1 := eg.EncryptNumber(msg)
+	c1_2, c2_2 := eg.EncryptNumber(msg)
+
+	data := PageData{
+		Title:         "TP 3: Asymmetric & MitM Lab",
+		ActiveTab:     "tp3",
+		ActiveSubTab:  "elgamal",
+		ElGamalResult: &ElGamalEncryptResult{
+			p:    strconv.Itoa(p),
+			g:    strconv.Itoa(g),
+			C1_1: c1_1,
+			C2_1: c2_1,
+			C1_2: c1_2,
+			C2_2: c2_2,
+		},
+	}
+
+	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+// ElGamal Forgery (Malleability)
+func ElGamalForgeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/tp3", http.StatusSeeOther)
+		return
+	}
+
+	c1Str := r.FormValue("c1")
+	c2Str := r.FormValue("c2")
+	multStr := r.FormValue("multiplier")
+
+	c1, _ := new(big.Int).SetString(c1Str, 10)
+	c2, _ := new(big.Int).SetString(c2Str, 10)
+	mult, _ := new(big.Int).SetString(multStr, 10)
+
+	if c1 == nil || c2 == nil {
+		c1 = big.NewInt(10)
+		c2 = big.NewInt(15)
+		mult = big.NewInt(2)
+	}
+
+	p := new(big.Int).Add(c2, big.NewInt(100))
+
+	for i := int64(2); i < 1000; i++ {
+		testP := big.NewInt(i)
+		if testP.ProbablyPrime(10) {
+			p = testP
+			break
+		}
+	}
+
+	c2Mult := new(big.Int).Mul(c2, mult)
+	c2Mult.Mod(c2Mult, p)
+
+	originalMsg := new(big.Int).Mod(c2, p)
+	forsMsg := new(big.Int).Mod(c2Mult, p)
+
+	data := PageData{
+		Title:         "TP 3: Asymmetric & MitM Lab",
+		ActiveTab:     "tp3",
+		ActiveSubTab:  "elgamal",
+		ElGamalForge: &ElGamalForgeResult{
+			OriginalMsg: originalMsg.String(),
+			ForgedMsg:   forsMsg.String(),
+		},
+	}
+
+	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+// ECC Point Operations
+func ECCPointHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/tp3", http.StatusSeeOther)
+		return
+	}
+
+	pxStr := r.FormValue("px")
+	pyStr := r.FormValue("py")
+	kStr := r.FormValue("k")
+
+	px, _ := strconv.Atoi(pxStr)
+	py, _ := strconv.Atoi(pyStr)
+	k, _ := strconv.Atoi(kStr)
+
+	if px == 0 {
+		px = 5
+	}
+	if py == 0 {
+		py = 12
+	}
+	if k == 0 {
+		k = 3
+	}
+
+	result := calculateECCMult(px, py, k)
+
+	data := PageData{
+		Title:         "TP 3: Asymmetric & MitM Lab",
+		ActiveTab:     "tp3",
+		ActiveSubTab:  "ecc",
+		ECCResult:     result,
+	}
+
+	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+func calculateECCMult(px, py, k int) *ECCResult {
+	p := 97
+	a := 0
+	b := 7
+
+	logs := []string{}
+
+	x, y := px, py
+	for i := 1; i < k; i++ {
+		logs = append(logs, fmt.Sprintf("Step %d: Adding point (%d,%d)", i+1, x, y))
+		x, y = pointAdd(x, y, px, py, p, a, b)
+		logs = append(logs, fmt.Sprintf("  -> Result: (%d,%d)", x, y))
+	}
+
+	return &ECCResult{
+		Qx:   strconv.Itoa(x),
+		Qy:   strconv.Itoa(y),
+		Logs: logs,
+	}
+}
+
+func pointAdd(x1, y1, x2, y2, p, a, b int) (int, int) {
+	if x1 == x2 && y1 == y2 {
+		lambda := (3*x1*x1 + a) * modInverse(2*y1, p) % p
+		x3 := (lambda*lambda - 2*x1) % p
+		y3 := (lambda*(x1-x3) - y1) % p
+		return modPos(x3, p), modPos(y3, p)
+	}
+
+	lambda := (y2 - y1) * modInverse(x2-x1, p) % p
+	x3 := (lambda*lambda - x1 - x2) % p
+	y3 := (lambda*(x1-x3) - y1) % p
+	return modPos(x3, p), modPos(y3, p)
+}
+
+func modInverse(a, m int) int {
+	a = modPos(a, m)
+	for i := 1; i < m; i++ {
+		if (a*i)%m == 1 {
+			return i
+		}
+	}
+	return 1
+}
+
+func modPos(n, p int) int {
+	result := n % p
+	if result < 0 {
+		result += p
+	}
+	return result
+}
+
+// ECDH Key Exchange
+func ECDHHandler(w http.ResponseWriter, r *http.Request) {
+	alicePriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		http.Redirect(w, r, "/tp3", http.StatusSeeOther)
+		return
+	}
+	bobPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		http.Redirect(w, r, "/tp3", http.StatusSeeOther)
+		return
+	}
+
+	sharedX, sharedY := elliptic.P256().ScalarMult(bobPriv.PublicKey.X, bobPriv.PublicKey.Y, alicePriv.D.Bytes())
+
+	sharedSecret := sha256.Sum256(append(sharedX.Bytes(), sharedY.Bytes()...))
+
+	data := PageData{
+		Title:         "TP 3: Asymmetric & MitM Lab",
+		ActiveTab:     "tp3",
+		ActiveSubTab:  "ecc",
+		ECDHResult: &ECDHResult{
+			AlicePrivate: alicePriv.D.String(),
+			AlicePublicX: alicePriv.PublicKey.X.String(),
+			AlicePublicY: alicePriv.PublicKey.Y.String(),
+			BobPrivate:   bobPriv.D.String(),
+			BobPublicX:   bobPriv.PublicKey.X.String(),
+			BobPublicY:   bobPriv.PublicKey.Y.String(),
+			SharedSecret: sharedX.String(),
+		},
+		ECDHAESKey: hex.EncodeToString(sharedSecret[:]),
 	}
 
 	templates.ExecuteTemplate(w, "base.html", data)
@@ -521,7 +1086,7 @@ func ChatHandler(w http.ResponseWriter, r *http.Request) {
 
 	msg := r.FormValue("message")
 	if msg != "" {
-		aesAlgo, _ := aes.InitAES("1234567890123456")
+		aesAlgo, _ := internalaes.InitAES("1234567890123456")
 		paddedMsg := msg
 		for len(paddedMsg)%16 != 0 {
 			paddedMsg += " "

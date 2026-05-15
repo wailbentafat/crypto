@@ -7,8 +7,10 @@ import (
 )
 
 type ElGamalAlgo struct {
-	p *big.Int
-	g *big.Int
+	p          *big.Int
+	g          *big.Int
+	PrivateKey *big.Int
+	PublicKey  *big.Int
 }
 
 func InitElGamal(p, g int) *ElGamalAlgo {
@@ -23,6 +25,9 @@ func (e *ElGamalAlgo) GenerateKeys() string {
 	privateKey.Add(privateKey, big.NewInt(2))
 
 	publicKey := new(big.Int).Exp(e.g, privateKey, e.p)
+
+	e.PrivateKey = privateKey
+	e.PublicKey = publicKey
 
 	return fmt.Sprintf("Private Key: %s\nPublic Key: %s\nPrime (p): %s\nGenerator (g): %s\n",
 		privateKey.String(), publicKey.String(), e.p.String(), e.g.String())
@@ -45,6 +50,28 @@ func (e *ElGamalAlgo) Encrypt(plaintext, pubKeyFile string) string {
 	c2.Mod(c2, e.p)
 
 	return fmt.Sprintf("C1: %s\nC2: %s\n", c1.String(), c2.String())
+}
+
+func (e *ElGamalAlgo) EncryptNumber(msg int) (string, string) {
+	m := big.NewInt(int64(msg))
+
+	k, _ := rand.Int(rand.Reader, e.p)
+	k.Add(k, big.NewInt(2))
+
+	c1 := new(big.Int).Exp(e.g, k, e.p)
+
+	var pubKey *big.Int
+	if e.PublicKey != nil {
+		pubKey = e.PublicKey
+	} else {
+		pubKey = new(big.Int).Exp(e.g, big.NewInt(5), e.p)
+	}
+
+	c2 := new(big.Int).Exp(pubKey, k, e.p)
+	c2.Mul(c2, m)
+	c2.Mod(c2, e.p)
+
+	return c1.String(), c2.String()
 }
 
 func (e *ElGamalAlgo) Decrypt(ciphertext, prvKeyFile string) string {
