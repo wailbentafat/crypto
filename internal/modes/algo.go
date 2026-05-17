@@ -287,3 +287,58 @@ type BlockAvalancheResult struct {
 	DiffBits    int
 	DiffPercent float64
 }
+
+type CTRNonceReuseResult struct {
+	XORResult    []byte
+	Plaintext1   string
+	Plaintext2   string
+	AttackMethod string
+}
+
+func (c *CTR) AttackNonceReuse(ciphertext1, ciphertext2 []byte) CTRNonceReuseResult {
+	minLen := len(ciphertext1)
+	if len(ciphertext2) < minLen {
+		minLen = len(ciphertext2)
+	}
+	
+	xorResult := make([]byte, minLen)
+	for i := 0; i < minLen; i++ {
+		xorResult[i] = ciphertext1[i] ^ ciphertext2[i]
+	}
+	
+	return CTRNonceReuseResult{
+		XORResult:    xorResult,
+		Plaintext1:   "Use crib dragging on XOR result",
+		Plaintext2:   "Use crib dragging on XOR result",
+		AttackMethod: "When nonce is reused in CTR mode, C1 ⊕ C2 = M1 ⊕ M2",
+	}
+}
+
+func CTRNoncedReuseAttack(ciphertexts [][]byte) []CTRNonceReuseResult {
+	results := make([]CTRNonceReuseResult, 0)
+	
+	if len(ciphertexts) < 2 {
+		return results
+	}
+	
+	for i := 0; i < len(ciphertexts); i++ {
+		for j := i + 1; j < len(ciphertexts); j++ {
+			minLen := len(ciphertexts[i])
+			if len(ciphertexts[j]) < minLen {
+				minLen = len(ciphertexts[j])
+			}
+			
+			xorResult := make([]byte, minLen)
+			for k := 0; k < minLen; k++ {
+				xorResult[k] = ciphertexts[i][k] ^ ciphertexts[j][k]
+			}
+			
+			results = append(results, CTRNonceReuseResult{
+				XORResult:    xorResult,
+				AttackMethod: fmt.Sprintf("XOR of ciphertext %d and %d: M1 ⊕ M2", i+1, j+1),
+			})
+		}
+	}
+	
+	return results
+}

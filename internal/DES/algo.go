@@ -3,6 +3,7 @@ package des
 import (
 	"encoding/hex"
 	"fmt"
+	"time"
 )
 
 type DESAlgo struct {
@@ -264,6 +265,134 @@ func (d *DESAlgo) Decrypt(ciphertext string) string {
 	}
 
 	return string(result)
+}
+
+func (d *DESAlgo) EncryptImage(imageData []byte) string {
+	keys := d.generateKeys()
+	
+	if len(imageData)%8 != 0 {
+		padding := 8 - (len(imageData) % 8)
+		imageData = append(imageData, make([]byte, padding)...)
+	}
+	
+	result := make([]byte, len(imageData))
+	for i := 0; i < len(imageData); i += 8 {
+		block := imageData[i : i+8]
+		encrypted := d.processBlock(block, keys, false)
+		copy(result[i:i+8], encrypted)
+	}
+	
+	return hex.EncodeToString(result)
+}
+
+func (d *DESAlgo) DecryptImage(ciphertextHex string) []byte {
+	ciphertext, err := hex.DecodeString(ciphertextHex)
+	if err != nil {
+		return nil
+	}
+	
+	keys := d.generateKeys()
+	
+	result := make([]byte, len(ciphertext))
+	for i := 0; i < len(ciphertext); i += 8 {
+		block := ciphertext[i : i+8]
+		decrypted := d.processBlock(block, keys, true)
+		copy(result[i:i+8], decrypted)
+	}
+	
+	return result
+}
+
+type ImageEncryptionResult struct {
+	OriginalSize   int
+	EncryptedSize  int
+	Visualization string
+	PatternVisible bool
+}
+
+func (d *DESAlgo) AnalyzeImageEncryption(imageData []byte) ImageEncryptionResult {
+	encrypted := d.EncryptImage(imageData)
+	
+	uniquePatterns := countUniquePatterns(encrypted)
+	patternVisible := uniquePatterns > len(imageData)/100
+	
+	return ImageEncryptionResult{
+		OriginalSize:   len(imageData),
+		EncryptedSize:  len(encrypted),
+		Visualization:  "Image encrypted in ECB mode - patterns may be visible",
+		PatternVisible: patternVisible,
+	}
+}
+
+func countUniquePatterns(hexStr string) int {
+	patterns := make(map[string]int)
+	for i := 0; i < len(hexStr)-16; i += 16 {
+		pattern := hexStr[i:i+16]
+		patterns[pattern]++
+	}
+	return len(patterns)
+}
+
+func (d *DESAlgo) CBCEncryptImage(iv []byte, imageData []byte) string {
+	keys := d.generateKeys()
+	
+	if len(imageData)%8 != 0 {
+		padding := 8 - (len(imageData) % 8)
+		imageData = append(imageData, make([]byte, padding)...)
+	}
+	
+	result := make([]byte, 0, len(imageData))
+	prevBlock := make([]byte, 8)
+	copy(prevBlock, iv)
+	
+	for i := 0; i < len(imageData); i += 8 {
+		block := imageData[i : i+8]
+		
+		xored := make([]byte, 8)
+		for j := 0; j < 8; j++ {
+			xored[j] = block[j] ^ prevBlock[j]
+		}
+		
+		encrypted := d.processBlock(xored, keys, false)
+		result = append(result, encrypted...)
+		copy(prevBlock, encrypted)
+	}
+	
+	return hex.EncodeToString(result)
+}
+
+func BenchmarkEncryption(dataSize int, key string) BenchmarkResult {
+	des := InitDES(key)
+	if len(key) > 8 {
+		key = key[:8]
+	}
+	
+	data := make([]byte, dataSize)
+	for i := range data {
+		data[i] = byte(i % 256)
+	}
+	
+	keys := des.generateKeys()
+	
+	start := time.Now()
+	for i := 0; i < len(data); i += 8 {
+		if i+8 <= len(data) {
+			des.processBlock(data[i:i+8], keys, false)
+		}
+	}
+	desTime := time.Since(start)
+	
+	return BenchmarkResult{
+		DataSize:    dataSize,
+		EncryptMs:   desTime.Milliseconds(),
+		Throughput:  float64(dataSize) / desTime.Seconds() / 1024 / 1024,
+	}
+}
+
+type BenchmarkResult struct {
+	DataSize    int
+	EncryptMs   int64
+	Throughput  float64
 }
 
 func main() {

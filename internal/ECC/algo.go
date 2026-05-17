@@ -1,6 +1,8 @@
 package ecc
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
@@ -321,4 +323,90 @@ func ImportPublicKey(xHex, yHex string) (Point, error) {
 
 func (kp *KeyPair) DeriveAESKey() []byte {
 	return ECDH(kp, kp.PublicKey, &P256)
+}
+
+type ECIESCipher struct {
+	EPH   Point
+	C1    []byte
+	C2    []byte
+}
+
+func ECIESEncrypt(plaintext []byte, recipientPubKey *Point, curve *Curve) (ECIESCipher, error) {
+	ephemeralPriv, err := rand.Int(rand.Reader, curve.P)
+	if err != nil {
+		return ECIESCipher{}, err
+	}
+	
+	ephemeralPub := ScalarMultiply(ephemeralPriv, &G, curve)
+	
+	sharedKey := ECDH(&KeyPair{PrivateKey: ephemeralPriv, PublicKey: *recipientPubKey}, *recipientPubKey, curve)
+	_ = ScalarMultiply(ephemeralPriv, recipientPubKey, curve)
+	
+	block, err := aes.NewCipher(sharedKey)
+	if err != nil {
+		return ECIESCipher{}, err
+	}
+	
+	iv := make([]byte, aes.BlockSize)
+	rand.Read(iv)
+	
+	ciphertext := make([]byte, len(plaintext))
+	cbc := cipher.NewCBCEncrypter(block, iv)
+	cbc.CryptBlocks(ciphertext, plaintext)
+	
+	mac := hmacSHA256(sharedKey, append(iv, ciphertext...))
+	
+	return ECIESCipher{
+		EPH:   *ephemeralPub,
+		C1:    iv,
+		C2:    append(ciphertext, mac...),
+	}, nil
+}
+
+func ECIESDecrypt(ec ECIESCipher, recipientPriv *big.Int, curve *Curve) ([]byte, error) {
+	sharedPoint := ScalarMultiply(recipientPriv, &ec.EPH, curve)
+	
+	sharedKey := make([]byte, 32)
+	copy(sharedKey, sharedPoint.X.Bytes())
+	
+	macReceived := ec.C2[len(ec.C2)-32:]
+	ciphertextOnly := ec.C2[:len(ec.C2)-32]
+	
+	macComputed := hmacSHA256(sharedKey, append(ec.C1, ciphertextOnly...))
+	if !hmacEqual(macReceived, macComputed) {
+		return nil, fmt.Errorf("HMAC verification failed")
+	}
+	
+	block, err := aes.NewCipher(sharedKey)
+	if err != nil {
+		return nil, err
+	}
+	
+	plaintext := make([]byte, len(ciphertextOnly))
+	cbc := cipher.NewCBCDecrypter(block, ec.C1)
+	cbc.CryptBlocks(plaintext, ciphertextOnly)
+	
+	return plaintext, nil
+}
+
+func hmacSHA256(key, data []byte) []byte {
+	h := sha256.New()
+	h.Write(key)
+	hmacKey := h.Sum(nil)
+	
+	h = sha256.New()
+	h.Write(hmacKey)
+	h.Write(data)
+	return h.Sum(nil)
+}
+
+func hmacEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	result := 0
+	for i := range a {
+		result |= int(a[i]) ^ int(b[i])
+	}
+	return result == 0
 }
