@@ -6,6 +6,7 @@ import (
 
 type CaesarAlgo struct {
 	decalage int
+	text     string
 }
 
 func InitCaesar(decalage int) *CaesarAlgo {

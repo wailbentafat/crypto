@@ -1078,24 +1078,47 @@ func createBMPHeader(width, height int) []byte {
 	return header
 }
 
+var chatSessionKey string
+
 func ChatHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Redirect(w, r, "/tp6", http.StatusSeeOther)
 		return
 	}
 
-	msg := r.FormValue("message")
-	if msg != "" {
-		aesAlgo, _ := internalaes.InitAES("1234567890123456")
-		paddedMsg := msg
-		for len(paddedMsg)%16 != 0 {
-			paddedMsg += " "
-		}
-		encrypted := aesAlgo.EncryptECB([]byte(paddedMsg))
-		hash := sha256.Sum256(encrypted)
-		logEntry := fmt.Sprintf("User: %s | Enc: %x... | Hash: %x...", msg, encrypted[:8], hash[:4])
-		chatLog = append(chatLog, logEntry)
+	msg := strings.TrimSpace(r.FormValue("message"))
+	if msg == "" {
+		http.Redirect(w, r, "/tp6", http.StatusSeeOther)
+		return
 	}
+
+	if len(chatLog) >= 50 {
+		chatLog = chatLog[len(chatLog)-50:]
+	}
+
+	aesAlgo, err := internalaes.InitAES("1234567890123456")
+	if err != nil {
+		log.Printf("Chat AES init error: %v", err)
+		http.Redirect(w, r, "/tp6", http.StatusSeeOther)
+		return
+	}
+
+	paddedMsg := msg
+	for len(paddedMsg)%16 != 0 {
+		paddedMsg += " "
+	}
+	encrypted := aesAlgo.EncryptECB([]byte(paddedMsg))
+	hash := sha256.Sum256(encrypted)
+
+	if chatSessionKey == "" {
+		keyBytes := make([]byte, 16)
+		rand.Read(keyBytes)
+		chatSessionKey = hex.EncodeToString(keyBytes)
+	}
+
+	logEntry := fmt.Sprintf("[%s] User: %s | Enc: %x... | Hash: %x...", 
+		time.Now().Format("15:04:05"), msg, encrypted[:8], hash[:4])
+	chatLog = append(chatLog, logEntry)
 
 	http.Redirect(w, r, "/tp6", http.StatusSeeOther)
 }

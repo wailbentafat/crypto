@@ -1,0 +1,173 @@
+{{define "tp5"}}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+    <div class="space-y-6">
+        <form action="/tp5/sign" method="POST" class="cyber-panel p-6 rounded-xl space-y-4">
+            <h3 class="text-lg font-semibold text-green-500 mb-4">Digital Signature Operations</h3>
+
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-400">Algorithm</label>
+                <select name="algorithm" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm outline-none focus:border-green-500">
+                    <option value="rsa-pss">RSA-PSS</option>
+                    <option value="rsa-pkcs1">RSA-PKCS#1 v1.5</option>
+                    <option value="dsa">DSA</option>
+                    <option value="ecdsa-p256">ECDSA P-256</option>
+                    <option value="ecdsa-p384">ECDSA P-384</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-400">Key Size (bits)</label>
+                <select name="keysize" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm outline-none focus:border-green-500">
+                    <option value="2048">2048</option>
+                    <option value="3072">3072</option>
+                    <option value="4096">4096</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-400">Message to Sign</label>
+                <textarea name="message" rows="4" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none" placeholder="Enter message..."></textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-2 text-gray-400">Operation</label>
+                <div class="flex gap-4">
+                    <label class="flex items-center">
+                        <input type="radio" name="mode" value="sign" checked class="mr-2"> Sign
+                    </label>
+                    <label class="flex items-center">
+                        <input type="radio" name="mode" value="verify" class="mr-2"> Verify
+                    </label>
+                </div>
+            </div>
+
+            <div id="signature-field" class="hidden">
+                <label class="block text-sm font-medium mb-2 text-gray-400">Signature</label>
+                <textarea name="signature" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none font-mono" placeholder="Paste signature..."></textarea>
+            </div>
+
+            <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors shadow-lg shadow-green-900/20">
+                Execute
+            </button>
+        </form>
+
+        {{if .SignResult}}
+        <div class="cyber-panel p-6 rounded-xl">
+            <h3 class="text-lg font-semibold mb-4 text-green-500">Signature Result</h3>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Algorithm:</span>
+                    <span class="text-green-400">{{.SignResult.Algorithm}}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Key Size:</span>
+                    <span class="text-green-400">{{.SignResult.KeySize}} bits</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400">Signature Length:</span>
+                    <span class="text-green-400">{{.SignResult.SignatureLen}} bytes</span>
+                </div>
+                <div class="mt-4">
+                    <span class="text-gray-400">Signature:</span>
+                    <div class="bg-black/50 p-3 rounded border border-gray-800 break-all font-mono text-xs text-green-400 mt-1">
+                        {{.SignResult.Signature}}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {{end}}
+
+        {{if .VerifyResult}}
+        <div class="cyber-panel p-6 rounded-xl">
+            <h3 class="text-lg font-semibold mb-4 text-green-500">Verification Result</h3>
+            <div class="flex items-center gap-4">
+                {{if .VerifyResult.Valid}}
+                <div class="text-4xl">✓</div>
+                <div>
+                    <div class="text-green-400 font-semibold">Signature Valid</div>
+                    <div class="text-gray-400 text-sm">Message authenticated successfully</div>
+                </div>
+                {{else}}
+                <div class="text-4xl">✗</div>
+                <div>
+                    <div class="text-red-400 font-semibold">Signature Invalid</div>
+                    <div class="text-gray-400 text-sm">{{.VerifyResult.Error}}</div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+    </div>
+
+    <div class="space-y-6">
+        <div class="cyber-panel p-6 rounded-xl">
+            <h3 class="text-lg font-semibold mb-4 text-green-500">Algorithm Comparison</h3>
+            <div class="space-y-4">
+                <div class="bg-gray-800/50 p-4 rounded-lg">
+                    <h4 class="text-green-400 font-medium mb-2">RSA-PSS</h4>
+                    <p class="text-gray-400 text-sm">Probabilistic Signature Scheme - recommended for new applications</p>
+                    <div class="mt-2 text-xs text-gray-500">Sig size: 256-512 bytes | Security: Based on RSA hardness</div>
+                </div>
+
+                <div class="bg-gray-800/50 p-4 rounded-lg">
+                    <h4 class="text-green-400 font-medium mb-2">DSA</h4>
+                    <p class="text-gray-400 text-sm">Digital Signature Algorithm - US Federal Standard</p>
+                    <div class="mt-2 text-xs text-gray-500">Sig size: 320 bytes | Key: 1024-3072 bits</div>
+                </div>
+
+                <div class="bg-gray-800/50 p-4 rounded-lg">
+                    <h4 class="text-green-400 font-medium mb-2">ECDSA</h4>
+                    <p class="text-gray-400 text-sm">Elliptic Curve DSA - smaller keys, equivalent security</p>
+                    <div class="mt-2 text-xs text-gray-500">Sig size: 64-148 bytes | Key: 224-521 bits</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="cyber-panel p-6 rounded-xl">
+            <h3 class="text-lg font-semibold mb-4 text-green-500">Security Properties</h3>
+            <div class="space-y-3 text-sm">
+                <div class="flex items-start gap-2">
+                    <span class="text-green-400">✓</span>
+                    <span class="text-gray-300">Authenticity: Verifies sender identity</span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="text-green-400">✓</span>
+                    <span class="text-gray-300">Integrity: Ensures message not modified</span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="text-green-400">✓</span>
+                    <span class="text-gray-300">Non-repudiation: Sender cannot deny signing</span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="text-yellow-400">!</span>
+                    <span class="text-gray-300">Confidentiality: Not provided (use encryption)</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="cyber-panel p-6 rounded-xl">
+            <h3 class="text-lg font-semibold mb-4 text-green-500">Attack Scenarios</h3>
+            <div class="space-y-3 text-sm text-gray-300">
+                <p><strong class="text-red-400">Reused k (ECDSA/DSA):</strong> If random k is reused, private key can be computed</p>
+                <p><strong class="text-red-400">Bleichenbacher:</strong> RSA-PKCS#1 vulnerable to padding oracle attacks</p>
+                <p><strong class="text-yellow-400">Countermeasure:</strong> Use PSS padding, unique k per signature</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    document.querySelector('input[name="mode"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const sigField = document.getElementById('signature-field');
+            if (e.target.value === 'verify') {
+                sigField.classList.remove('hidden');
+            } else {
+                sigField.classList.add('hidden');
+            }
+        });
+    });
+</script>
+{{end}}
