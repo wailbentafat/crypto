@@ -40,7 +40,12 @@
                 </li>
                 <li>
                     <a href="/tp4" class="flex items-center p-3 rounded-lg {{if eq .ActiveTab "tp4"}}bg-green-900/20 text-green-400 border border-green-500/50{{else}}hover:bg-gray-800{{end}}">
-                        <span class="mr-3">🛡️</span> TP 4: Integrity
+                        <span class="mr-3">🔍</span> TP 4: Hashing
+                    </a>
+                </li>
+                <li>
+                    <a href="/tp5" class="flex items-center p-3 rounded-lg {{if eq .ActiveTab "tp5"}}bg-green-900/20 text-green-400 border border-green-500/50{{else}}hover:bg-gray-800{{end}}">
+                        <span class="mr-3">✍️</span> TP 5: Signatures
                     </a>
                 </li>
                 <li>
@@ -76,6 +81,9 @@
             {{end}}
             {{if eq .ActiveTab "tp4"}}
                 {{template "tp4" .}}
+            {{end}}
+            {{if eq .ActiveTab "tp5"}}
+                {{template "tp5" .}}
             {{end}}
             {{if eq .ActiveTab "tp6"}}
                 {{template "tp6" .}}

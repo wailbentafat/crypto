@@ -1,6 +1,7 @@
 package web
 
 import (
+	"crypto/internal/Chat"
 	"fmt"
 	"net/http"
 )
@@ -26,6 +27,8 @@ func StartServer(port int) error {
 	mux.HandleFunc("/tp3/rsa-keygen", RSAKeyGenHandler)
 	mux.HandleFunc("/tp3/hybrid-encrypt", HybridEncryptHandler)
 	mux.HandleFunc("/tp3/hybrid-decrypt", HybridDecryptHandler)
+	mux.HandleFunc("/tp3/rsa-encrypt-text", RSATextEncryptHandler)
+	mux.HandleFunc("/tp3/rsa-decrypt-text", RSATextDecryptHandler)
 	mux.HandleFunc("/tp3/benchmark", HybridBenchmarkHandler)
 	mux.HandleFunc("/tp3/elgamal-encrypt", ElGamalEncryptHandler)
 	mux.HandleFunc("/tp3/elgamal-forge", ElGamalForgeHandler)
@@ -33,9 +36,24 @@ func StartServer(port int) error {
 	mux.HandleFunc("/tp3/ecdh", ECDHHandler)
 	mux.HandleFunc("/tp4", TP4Handler)
 	mux.HandleFunc("/tp4/hash", HashHandler)
+	mux.HandleFunc("/tp4/signature", SignatureHandler)
+	mux.HandleFunc("/tp5", TP5Handler)
+	mux.HandleFunc("/tp5/signature", TP5SignatureHandler)
 	mux.HandleFunc("/tp6", TP6Handler)
 	mux.HandleFunc("/tp6/chat", ChatHandler)
+	
+	// WebSocket Chat Routes
+	mux.HandleFunc("/ws/chat", chat.HandleWebSocketConnection)
+	mux.HandleFunc("/ws/rooms", RoomsHandler)
 
 	fmt.Printf("CryptoLab Dashboard starting on http://localhost:%d\n", port)
+	fmt.Printf("WebSocket Chat available at: ws://localhost:%d/ws/chat?room=nom_du_salon&username=votre_nom\n", port)
 	return http.ListenAndServe(fmt.Sprintf(":%d", port), mux)
+}
+
+// RoomsHandler shows active chat rooms
+func RoomsHandler(w http.ResponseWriter, r *http.Request) {
+	rooms := chat.GetRoomsInfo()
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(fmt.Sprintf("%v", rooms)))
 }

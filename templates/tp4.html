@@ -1,66 +1,291 @@
 {{define "tp4"}}
 <div class="space-y-12">
-    
+
     <!-- Hash Inspector -->
     <section class="cyber-panel p-8 rounded-2xl">
-        <h3 class="text-2xl font-bold text-green-500 mb-8">Hash Inspector</h3>
-        
-        <form action="/tp4/hash" method="POST" class="space-y-6 mb-8">
+        <h3 class="text-2xl font-bold text-green-500 mb-2">Hash Inspector</h3>
+        <p class="text-xs text-gray-500 mb-8">A hash function maps any input to a fixed-length digest. A one-character change produces a completely different hash (avalanche effect). Hashes are one-way — you cannot reverse them to get the input.</p>
+
+        <!-- Preset examples -->
+        <div class="flex flex-wrap gap-2 mb-4">
+            <span class="text-xs text-gray-500 self-center">Quick test:</span>
+            <button onclick="setHashInput('Hello World')" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded border border-gray-700">Hello World</button>
+            <button onclick="setHashInput('hello world')" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded border border-gray-700">hello world (lowercase)</button>
+            <button onclick="setHashInput('password123')" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded border border-gray-700">password123</button>
+            <button onclick="setHashInput('The quick brown fox jumps over the lazy dog')" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded border border-gray-700">Pangram</button>
+            <button onclick="setHashInput('')" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded border border-gray-700">Empty string</button>
+        </div>
+
+        <form action="/tp4/hash" method="POST" class="space-y-4 mb-8" id="hashForm">
             <div>
                 <label class="block text-sm font-medium mb-2 text-gray-400">Input Data</label>
-                <textarea name="input_text" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none" placeholder="Enter text to hash...">{{.InputText}}</textarea>
+                <textarea name="input_text" id="hashInput" rows="3"
+                    class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none"
+                    placeholder="Enter text to hash...">{{.InputText}}</textarea>
             </div>
             <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-all">
-                Compute Hashes
+                Compute Hashes (MD5, SHA-256, SHA-512)
             </button>
         </form>
 
         {{if .Hashes}}
-        <div class="space-y-6">
+        <div class="space-y-4">
             {{range $name, $hash := .Hashes}}
             <div class="space-y-2">
                 <div class="flex justify-between items-center">
-                    <span class="text-xs font-bold text-gray-500 uppercase">{{$name}}</span>
-                    <span class="text-[10px] text-gray-600">{{len $hash}} chars (hex)</span>
+                    <span class="text-xs font-bold text-gray-400 uppercase">{{$name}}</span>
+                    <span class="text-[10px] text-gray-600">{{len $hash}} hex chars</span>
                 </div>
-                <div class="bg-black/40 p-4 rounded-xl border border-gray-800 font-mono text-sm text-green-400 break-all">
-                    {{$hash}}
+                <div class="relative group">
+                    <div class="bg-black/40 p-4 rounded-xl border border-gray-800 font-mono text-sm text-green-400 break-all">{{$hash}}</div>
                 </div>
             </div>
             {{end}}
+
+            <!-- Avalanche visualization -->
+            <div class="mt-6 p-5 bg-black/40 rounded-xl border border-gray-800">
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-xs font-bold text-gray-400 uppercase">Avalanche Effect (SHA-256)</span>
+                    <span class="text-xs text-gray-600">1 bit flip in input → ?? bits change in output</span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="flex-1 bg-gray-800 rounded-full h-3 overflow-hidden">
+                        <div class="h-full {{if gt .HashAval 45.0}}bg-green-500{{else}}bg-yellow-500{{end}} rounded-full transition-all"
+                            style="width: {{printf "%.0f" .HashAval}}%"></div>
+                    </div>
+                    <div class="text-2xl font-bold {{if gt .HashAval 45.0}}text-green-400{{else}}text-yellow-500{{end}} min-w-[4rem] text-right">
+                        {{printf "%.1f" .HashAval}}%
+                    </div>
+                </div>
+                <p class="text-[10px] text-gray-600 mt-2">Ideal: ~50%. A single bit change in "{{.InputText}}" changed {{printf "%.1f" .HashAval}}% of SHA-256 output bits.</p>
+            </div>
         </div>
         {{end}}
     </section>
 
-    <!-- Hash Avalanche -->
-    <section class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div class="cyber-panel p-8 rounded-2xl">
-            <h3 class="text-xl font-bold text-green-500 mb-6">SHA-256 Avalanche</h3>
-            <div class="space-y-6">
-                <p class="text-xs text-gray-500">Changing 1 bit in the input message completely randomizes the resulting SHA-256 hash.</p>
-                <div class="bg-black/40 p-10 rounded-xl border border-gray-800 text-center">
-                    <div class="text-6xl font-bold {{if gt .HashAval 45.0}}text-green-400{{else}}text-yellow-500{{end}} mb-2">{{printf "%.1f" .HashAval}}%</div>
-                    <div class="text-xs text-gray-600 uppercase tracking-widest">Bit Diffusion</div>
-                </div>
-                <div class="text-center text-[10px] text-gray-600 italic">
-                    * A perfect hash should ideally have ~50% avalanche effect.
-                </div>
-            </div>
-        </div>
+    <!-- Digital Signatures -->
+    <section class="cyber-panel p-8 rounded-2xl">
+        <h3 class="text-2xl font-bold text-green-500 mb-2">Digital Signatures</h3>
+        <p class="text-xs text-gray-500 mb-8">A digital signature proves a message came from you (authentication) and wasn't modified in transit (integrity). Sign with your private key; anyone can verify with your public key.</p>
 
-        <div class="cyber-panel p-8 rounded-2xl">
-            <h3 class="text-xl font-bold text-green-500 mb-6">Digital Signatures</h3>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+            <!-- Left: Sign -->
             <div class="space-y-6">
-                <div class="flex flex-col items-center justify-center h-48 border-2 border-dashed border-gray-800 rounded-xl text-gray-600 space-y-4">
-                    <span class="text-4xl">🔏</span>
-                    <p class="text-sm">RSA-PSS & ECDSA Module</p>
+                <div class="flex items-center space-x-2">
+                    <div class="w-6 h-6 rounded-full bg-green-600 flex items-center justify-center text-xs font-bold">1</div>
+                    <h4 class="text-sm font-bold text-green-400 uppercase">Sign a Message</h4>
                 </div>
-                <button disabled class="w-full bg-gray-800 text-gray-600 cursor-not-allowed py-3 rounded-lg text-sm font-bold">
-                    Coming Soon (TP 5)
-                </button>
+
+                <form action="/tp4/signature" method="POST" class="space-y-4" id="signForm">
+                    <div>
+                        <label class="block text-xs font-medium mb-2 text-gray-500 uppercase">Algorithm</label>
+                        <select name="algorithm" id="algorithmSelect" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none">
+                            <option value="rsa-pss" {{if .SignatureResult}}{{if eq .SignatureResult.Algorithm "RSA-PSS"}}selected{{end}}{{end}}>RSA-PSS (2048-bit) — randomized, modern</option>
+                            <option value="rsa-pkcs1v15" {{if .SignatureResult}}{{if eq .SignatureResult.Algorithm "RSA-PKCS#1 v1.5"}}selected{{end}}{{end}}>RSA-PKCS#1 v1.5 (2048-bit) — deterministic, legacy</option>
+                            <option value="ecdsa-p256" {{if .SignatureResult}}{{if eq .SignatureResult.Algorithm "ECDSA P-256"}}selected{{end}}{{end}}>ECDSA P-256 — shorter keys, same security</option>
+                            <option value="ecdsa-p384" {{if .SignatureResult}}{{if eq .SignatureResult.Algorithm "ECDSA P-384"}}selected{{end}}{{end}}>ECDSA P-384 — higher security level</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium mb-2 text-gray-500 uppercase">Message to Sign</label>
+                        <div class="flex flex-wrap gap-2 mb-2">
+                            <button type="button" onclick="setSigMsg('Hello World')" class="text-xs bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded border border-gray-700">Hello World</button>
+                            <button type="button" onclick="setSigMsg('Transfer €500 to Alice')" class="text-xs bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded border border-gray-700">Bank transfer</button>
+                            <button type="button" onclick="setSigMsg('Contract: I agree to the terms.')" class="text-xs bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded border border-gray-700">Contract</button>
+                        </div>
+                        <input type="text" name="message" id="signMessage"
+                            class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none"
+                            placeholder="Enter message to sign..."
+                            value="{{if .SignatureResult}}{{.SignatureResult.Message}}{{else}}Hello World{{end}}">
+                    </div>
+                    <button type="submit" name="action" value="sign"
+                        class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-all">
+                        Sign Message (with private key)
+                    </button>
+                </form>
+
+                {{if .SignatureResult}}
+                {{if .SignatureResult.Signature}}
+                <div class="space-y-4 pt-4 border-t border-gray-800">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-bold text-gray-500 uppercase">Algorithm</span>
+                        <span class="text-sm text-green-400">{{.SignatureResult.Algorithm}}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-bold text-gray-500 uppercase">Key Size</span>
+                        <span class="text-sm text-blue-400">{{.SignatureResult.KeySize}} bits</span>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs font-bold text-gray-500 uppercase">Signature (hex)</span>
+                            <button type="button" onclick="copyToVerify()" class="text-xs text-green-400 hover:text-green-300 border border-green-500/30 px-2 py-1 rounded">
+                                Copy → Verify
+                            </button>
+                        </div>
+                        <div id="sigDisplay" class="bg-black/40 p-3 rounded-xl border border-yellow-500/30 font-mono text-xs text-yellow-400 break-all max-h-24 overflow-y-auto">{{.SignatureResult.Signature}}</div>
+                    </div>
+                    {{if .SignatureResult.PublicKey}}
+                    <div>
+                        <span class="text-xs font-bold text-gray-500 uppercase block mb-1">Public Key</span>
+                        <div id="pubKeyDisplay" class="bg-black/40 p-3 rounded-xl border border-purple-500/20 font-mono text-xs text-purple-400 break-all max-h-20 overflow-y-auto">{{.SignatureResult.PublicKey}}</div>
+                    </div>
+                    {{end}}
+                    {{if .SignatureResult.Verified}}
+                    <div class="text-center p-3 rounded-xl border border-green-800 bg-green-900/20">
+                        <span class="text-sm font-bold text-green-400">✓ Signature Valid — message is authentic</span>
+                    </div>
+                    {{end}}
+                </div>
+                {{end}}
+                {{end}}
+            </div>
+
+            <!-- Right: Verify + Tamper Test -->
+            <div class="space-y-6">
+                <div class="flex items-center space-x-2">
+                    <div class="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold">2</div>
+                    <h4 class="text-sm font-bold text-blue-400 uppercase">Verify a Signature</h4>
+                </div>
+                <p class="text-xs text-gray-500">Paste the signature from Step 1. Change even one character of the message to see verification fail.</p>
+
+                <form action="/tp4/signature" method="POST" class="space-y-4" id="verifyForm">
+                    <input type="hidden" name="action" value="verify">
+                    <div>
+                        <label class="block text-xs font-medium mb-2 text-gray-500 uppercase">Algorithm</label>
+                        <select name="algorithm" id="verifyAlgorithm" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm outline-none">
+                            <option value="rsa-pss">RSA-PSS (2048-bit)</option>
+                            <option value="rsa-pkcs1v15">RSA-PKCS#1 v1.5 (2048-bit)</option>
+                            <option value="ecdsa-p256">ECDSA P-256</option>
+                            <option value="ecdsa-p384">ECDSA P-384</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium mb-2 text-gray-500 uppercase">Message (must match signed message exactly)</label>
+                        <input type="text" name="message" id="verifyMessage"
+                            class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-blue-500 outline-none"
+                            placeholder="Original message..."
+                            value="{{if .SignatureResult}}{{.SignatureResult.Message}}{{end}}">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium mb-2 text-gray-500 uppercase">Signature (hex)</label>
+                        <textarea name="signature" id="verifySignature" rows="3"
+                            class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-xs font-mono focus:border-blue-500 outline-none"
+                            placeholder="Paste signature hex from Step 1, or click 'Copy → Verify' above...">{{if .SignatureResult}}{{if not .SignatureResult.PublicKey}}{{.SignatureResult.Signature}}{{end}}{{end}}</textarea>
+                    </div>
+                    <div class="flex gap-3">
+                        <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all">
+                            Verify Signature
+                        </button>
+                        <button type="button" onclick="tamperAndVerify()" class="flex-1 bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg transition-all">
+                            Tamper + Verify
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-gray-600">"Tamper + Verify" appends a space to the message, simulating a modification — verification should fail.</p>
+                </form>
+
+                {{if .SignatureResult}}
+                {{if not .SignatureResult.PublicKey}}
+                <div class="text-center p-5 rounded-xl border {{if .SignatureResult.Verified}}border-green-800 bg-green-900/20{{else}}border-red-800 bg-red-900/20{{end}}">
+                    {{if .SignatureResult.Verified}}
+                    <p class="text-xl font-bold text-green-400 mb-1">✓ Signature Valid</p>
+                    <p class="text-xs text-gray-400">The message is authentic and unmodified.</p>
+                    {{else}}
+                    <p class="text-xl font-bold text-red-400 mb-1">✗ Verification Failed</p>
+                    <p class="text-xs text-gray-400">The message was tampered with, or the signature/key doesn't match.</p>
+                    {{end}}
+                </div>
+                {{end}}
+                {{end}}
+
+                <!-- Algorithm info -->
+                <div class="bg-blue-900/10 border border-blue-500/20 p-5 rounded-xl">
+                    <h4 class="text-xs font-bold text-blue-400 uppercase mb-3">Algorithm Comparison</h4>
+                    <table class="w-full text-xs text-gray-400">
+                        <thead>
+                            <tr class="text-gray-600 border-b border-gray-700">
+                                <th class="text-left pb-2">Algorithm</th>
+                                <th class="text-left pb-2">Key Size</th>
+                                <th class="text-left pb-2">Sig Size</th>
+                                <th class="text-left pb-2">Type</th>
+                            </tr>
+                        </thead>
+                        <tbody class="space-y-1">
+                            <tr class="border-b border-gray-800">
+                                <td class="py-1 text-green-400">RSA-PSS</td>
+                                <td>2048 bit</td>
+                                <td>256 B</td>
+                                <td>Randomized</td>
+                            </tr>
+                            <tr class="border-b border-gray-800">
+                                <td class="py-1 text-yellow-400">RSA-PKCS1</td>
+                                <td>2048 bit</td>
+                                <td>256 B</td>
+                                <td>Deterministic</td>
+                            </tr>
+                            <tr class="border-b border-gray-800">
+                                <td class="py-1 text-blue-400">ECDSA P-256</td>
+                                <td>256 bit</td>
+                                <td>72 B</td>
+                                <td>Randomized</td>
+                            </tr>
+                            <tr>
+                                <td class="py-1 text-purple-400">ECDSA P-384</td>
+                                <td>384 bit</td>
+                                <td>104 B</td>
+                                <td>Randomized</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </section>
 
+    {{if .SignatureResult}}
+    {{if .SignatureResult.Description}}
+    <section class="cyber-panel p-8 rounded-2xl">
+        <h3 class="text-xl font-bold text-green-500 mb-4">About {{.SignatureResult.Algorithm}}</h3>
+        <pre class="text-xs text-gray-400 whitespace-pre-wrap bg-black/40 p-4 rounded-xl border border-gray-800 leading-relaxed">{{.SignatureResult.Description}}</pre>
+    </section>
+    {{end}}
+    {{end}}
+
 </div>
+
+<script>
+function setHashInput(val) {
+    const ta = document.getElementById('hashInput');
+    if (ta) { ta.value = val; ta.focus(); }
+}
+
+function setSigMsg(msg) {
+    const el = document.getElementById('signMessage');
+    if (el) el.value = msg;
+}
+
+function copyToVerify() {
+    const sig = document.getElementById('sigDisplay')?.textContent?.trim() || '';
+    const algo = document.getElementById('algorithmSelect')?.value || '';
+    const msg = document.getElementById('signMessage')?.value || '';
+
+    const verifySig = document.getElementById('verifySignature');
+    const verifyMsg = document.getElementById('verifyMessage');
+    const verifyAlgo = document.getElementById('verifyAlgorithm');
+
+    if (verifySig) { verifySig.value = sig; verifySig.style.borderColor = '#22c55e'; setTimeout(() => verifySig.style.borderColor = '', 1500); }
+    if (verifyMsg) { verifyMsg.value = msg; }
+    if (verifyAlgo) { verifyAlgo.value = algo; }
+}
+
+function tamperAndVerify() {
+    const msg = document.getElementById('verifyMessage');
+    if (msg) {
+        msg.value = msg.value + ' ';  // append a space — one character change
+        msg.style.borderColor = '#ef4444';
+        setTimeout(() => msg.style.borderColor = '', 1500);
+    }
+    document.getElementById('verifyForm')?.submit();
+}
+</script>
 {{end}}

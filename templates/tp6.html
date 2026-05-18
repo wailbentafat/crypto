@@ -1,94 +1,476 @@
 {{define "tp6"}}
 <div class="space-y-12">
-    
-    <!-- Secure Chat Simulation -->
-    <section class="cyber-panel p-8 rounded-2xl">
-        <h3 class="text-2xl font-bold text-green-500 mb-8">Secure Chat Simulation</h3>
-        
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Chat Window -->
-            <div class="lg:col-span-2 space-y-4">
-                <div class="bg-black/60 rounded-xl border border-gray-800 h-96 overflow-y-auto p-4 flex flex-col space-y-4">
-                    {{if .ChatLog}}
-                        {{range .ChatLog}}
-                        <div class="bg-gray-900 border border-gray-800 p-3 rounded-lg self-start max-w-[80%]">
-                            <p class="text-xs font-mono text-green-400 mb-1">Incoming Secure Packet...</p>
-                            <p class="text-sm text-gray-300">{{.}}</p>
-                        </div>
-                        {{end}}
-                    {{else}}
-                        <div class="flex-1 flex items-center justify-center text-gray-700 text-sm">
-                            No messages in this session. Start the secure exchange below.
-                        </div>
-                    {{end}}
-                </div>
 
-                <form action="/tp6/chat" method="POST" class="flex space-x-2">
-                    <input type="text" name="message" class="flex-1 bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none" placeholder="Type a message to encrypt and send...">
-                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
-                        Send Secure
+    <!-- Secure Chat Section -->
+    <section class="cyber-panel p-8 rounded-2xl">
+        <h3 class="text-2xl font-bold text-green-500 mb-2">Secure Chat Rooms (WebSocket + AES-256-CBC)</h3>
+        <p class="text-xs text-gray-500 mb-8">
+            Each room is an isolated encrypted channel. Messages are encrypted with AES-256-CBC before transmission.
+            Open two browser tabs, join the same room, and watch encrypted messages arrive in real time.
+        </p>
+
+        <!-- Connection Panel -->
+        <div id="connectionPanel" class="bg-gray-900/60 border border-gray-700 rounded-xl p-6 mb-6">
+            <div class="flex flex-wrap items-end gap-4">
+                <div class="flex-1 min-w-[160px]">
+                    <label class="text-xs text-gray-500 block mb-2 uppercase">Your Username</label>
+                    <input type="text" id="chatUsername"
+                        class="w-full bg-black border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none"
+                        value="Alice">
+                </div>
+                <div class="flex-1 min-w-[160px]">
+                    <label class="text-xs text-gray-500 block mb-2 uppercase">Room Name</label>
+                    <input type="text" id="chatRoom"
+                        class="w-full bg-black border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none"
+                        value="crypto-lab">
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="loadRooms()" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-3 rounded-lg text-sm font-bold transition-all">
+                        Rooms
                     </button>
-                </form>
+                    <button id="connectBtn" onclick="connectChat()"
+                        class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold transition-all">
+                        Connect
+                    </button>
+                </div>
             </div>
 
-            <!-- Protocol Status -->
-            <div class="space-y-6">
-                <div class="cyber-panel p-6 rounded-xl border-green-500/20">
-                    <h4 class="text-xs font-bold text-gray-500 uppercase mb-4 tracking-widest">Active Protocol Stack</h4>
-                    <ul class="space-y-3">
+            <!-- Quick Room Presets -->
+            <div class="flex flex-wrap gap-2 mt-4">
+                <span class="text-xs text-gray-600 self-center">Join room:</span>
+                <button onclick="setRoom('crypto-lab')" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded border border-gray-700">crypto-lab</button>
+                <button onclick="setRoom('secure-ops')" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded border border-gray-700">secure-ops</button>
+                <button onclick="setRoom('alice-bob')" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded border border-gray-700">alice-bob</button>
+                <button onclick="setRoom('lab-demo')" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded border border-gray-700">lab-demo</button>
+            </div>
+
+            <div id="connectionStatus" class="mt-4 text-sm text-gray-500">
+                Not connected. Enter a username and room name, then click Connect.
+            </div>
+        </div>
+
+        <!-- Main Chat + Inspector layout -->
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+            <!-- Chat Window (2/3 width) -->
+            <div class="xl:col-span-2 space-y-3">
+                <div class="flex justify-between items-center">
+                    <h4 class="text-xs font-bold text-gray-500 uppercase tracking-widest">Chat Messages</h4>
+                    <div id="roomBadge" class="hidden text-xs text-green-400 border border-green-500/30 px-3 py-1 rounded-full"></div>
+                </div>
+                <div id="chatWindow"
+                    class="bg-black/60 rounded-xl border border-gray-800 h-96 overflow-y-auto p-4 flex flex-col space-y-3">
+                    <div class="flex-1 flex items-center justify-center text-gray-700 text-sm" id="emptyState">
+                        <div class="text-center">
+                            <p class="text-4xl mb-3">💬</p>
+                            <p class="text-gray-500">Connect and start chatting!</p>
+                            <p class="text-xs text-gray-700 mt-2">Open another tab, join the same room with a different username to simulate two users.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Message Input -->
+                <div id="messageForm" class="flex space-x-2 opacity-50 pointer-events-none">
+                    <input type="text" id="chatMessage"
+                        class="flex-1 bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none"
+                        placeholder="Type a message..."
+                        onkeypress="if(event.key==='Enter')sendChatMessage()">
+                    <button onclick="sendChatMessage()"
+                        class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold transition-all">
+                        Send
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Panel: Crypto Inspector + Protocol -->
+            <div class="space-y-5">
+
+                <!-- Protocol Stack -->
+                <div class="cyber-panel p-5 rounded-xl">
+                    <h4 class="text-xs font-bold text-gray-500 uppercase mb-4 tracking-widest">Protocol Stack</h4>
+                    <ul class="space-y-2">
                         <li class="flex items-center text-xs text-green-400">
                             <span class="w-2 h-2 bg-green-500 rounded-full mr-3 animate-pulse"></span>
-                            Handshake: Diffie-Hellman
+                            Transport: WebSocket (ws://)
                         </li>
                         <li class="flex items-center text-xs text-green-400">
                             <span class="w-2 h-2 bg-green-500 rounded-full mr-3 animate-pulse"></span>
-                            Cipher: AES-128 (ECB)
+                            Key Exchange: Diffie-Hellman
                         </li>
                         <li class="flex items-center text-xs text-green-400">
                             <span class="w-2 h-2 bg-green-500 rounded-full mr-3 animate-pulse"></span>
-                            Integrity: SHA-256
+                            Cipher: AES-256-CBC
+                        </li>
+                        <li class="flex items-center text-xs text-green-400">
+                            <span class="w-2 h-2 bg-green-500 rounded-full mr-3 animate-pulse"></span>
+                            Integrity: HMAC-SHA256
                         </li>
                     </ul>
                 </div>
 
-                <div class="bg-blue-900/10 border border-blue-500/20 p-6 rounded-xl">
-                    <h4 class="text-xs font-bold text-blue-400 uppercase mb-2 tracking-widest">TP 6.1 Info</h4>
-                    <p class="text-[10px] text-gray-500 leading-relaxed">
-                        This module simulates the multi-layered protection required for secure socket applications. Every message is padded, encrypted, and hashed before transmission.
-                    </p>
+                <!-- Crypto Inspector: shows AES-CBC of last message -->
+                <div class="cyber-panel p-5 rounded-xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-xs font-bold text-gray-500 uppercase tracking-widest">Wire Inspector</h4>
+                        <span class="text-[10px] text-yellow-500 border border-yellow-500/30 px-2 py-0.5 rounded">LIVE</span>
+                    </div>
+                    <p class="text-[10px] text-gray-600 mb-3">What's actually sent over the network (AES-256-CBC):</p>
+                    <div id="inspectorEmpty" class="text-xs text-gray-700 italic">Send a message to see its encrypted form...</div>
+                    <div id="inspectorContent" class="hidden space-y-2">
+                        <div>
+                            <span class="text-[10px] text-gray-600 uppercase">IV (random, 16 bytes)</span>
+                            <div id="inspectorIV" class="font-mono text-xs text-blue-400 break-all mt-1"></div>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-gray-600 uppercase">Ciphertext (AES-CBC)</span>
+                            <div id="inspectorCipher" class="font-mono text-xs text-orange-400 break-all mt-1 max-h-20 overflow-y-auto"></div>
+                        </div>
+                        <div>
+                            <span class="text-[10px] text-gray-600 uppercase">HMAC-SHA256</span>
+                            <div id="inspectorHMAC" class="font-mono text-xs text-purple-400 break-all mt-1"></div>
+                        </div>
+                        <div class="pt-2 border-t border-gray-700">
+                            <span class="text-[10px] text-gray-600 uppercase">Decrypted (recipient sees)</span>
+                            <div id="inspectorPlain" class="font-mono text-xs text-green-400 mt-1"></div>
+                        </div>
+                    </div>
                 </div>
+
+                <!-- Room Members -->
+                <div class="cyber-panel p-5 rounded-xl">
+                    <h4 class="text-xs font-bold text-gray-500 uppercase mb-3 tracking-widest">Room Members</h4>
+                    <div id="memberList" class="space-y-2">
+                        <p class="text-xs text-gray-700 italic">Connect to see members...</p>
+                    </div>
+                </div>
+
             </div>
         </div>
     </section>
 
-    <!-- Electronic Voting Module -->
+    <!-- How it works -->
     <section class="cyber-panel p-8 rounded-2xl">
-        <h3 class="text-xl font-bold text-green-500 mb-6">Electronic Voting (Homomorphic Demo)</h3>
+        <h3 class="text-xl font-bold text-green-500 mb-6">How Secure Rooms Work</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="space-y-3">
+                <div class="w-10 h-10 rounded-full bg-green-900/40 border border-green-500/30 flex items-center justify-center text-lg">1</div>
+                <h4 class="text-sm font-bold text-gray-300">Connect & Identify</h4>
+                <p class="text-xs text-gray-500">Client opens a WebSocket connection to <code class="text-green-400 bg-black/30 px-1 rounded">/ws/chat?room=NAME&amp;username=USER</code>. The server creates or joins the room and assigns a 256-bit AES key.</p>
+            </div>
+            <div class="space-y-3">
+                <div class="w-10 h-10 rounded-full bg-blue-900/40 border border-blue-500/30 flex items-center justify-center text-lg">2</div>
+                <h4 class="text-sm font-bold text-gray-300">Encrypt & Send</h4>
+                <p class="text-xs text-gray-500">Each message is AES-256-CBC encrypted with a fresh random IV. The HMAC-SHA256 is computed over the ciphertext for integrity. The wire never carries plaintext.</p>
+            </div>
+            <div class="space-y-3">
+                <div class="w-10 h-10 rounded-full bg-purple-900/40 border border-purple-500/30 flex items-center justify-center text-lg">3</div>
+                <h4 class="text-sm font-bold text-gray-300">Broadcast & Decrypt</h4>
+                <p class="text-xs text-gray-500">The server decrypts the incoming message, verifies the HMAC, then re-encrypts for each recipient in the room before forwarding. Each recipient decrypts to see the plaintext.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Electronic Voting -->
+    <section class="cyber-panel p-8 rounded-2xl">
+        <h3 class="text-xl font-bold text-green-500 mb-6">Electronic Voting (Homomorphic — Paillier)</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             <div class="space-y-4">
-                <p class="text-xs text-gray-500">Homomorphic encryption allows performing calculations on ciphertexts. In voting, this means tallying encrypted votes without ever decrypting individual ones.</p>
-                <div class="flex space-x-4">
-                    <button disabled class="flex-1 bg-gray-800 text-gray-600 py-3 rounded-lg text-sm font-bold cursor-not-allowed">Vote Candidate A</button>
-                    <button disabled class="flex-1 bg-gray-800 text-gray-600 py-3 rounded-lg text-sm font-bold cursor-not-allowed">Vote Candidate B</button>
-                </div>
-            </div>
-            <div class="bg-black/40 p-6 rounded-xl border border-gray-800">
-                <h4 class="text-xs font-bold text-gray-500 uppercase mb-4">Encrypted Tally</h4>
+                <p class="text-xs text-gray-500 leading-relaxed">Paillier homomorphic encryption allows tallying votes without ever decrypting individual ballots. The property: <code class="text-green-400 bg-black/30 px-1 rounded">E(a) · E(b) = E(a + b)</code>. Cast your vote below — the encrypted tally updates but individual votes remain private.</p>
                 <div class="space-y-2">
-                    <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
-                        <div class="w-1/2 h-full bg-green-500/50"></div>
+                    <div class="text-xs text-gray-600 uppercase mb-1">How votes stay private:</div>
+                    <div class="flex items-center gap-2 text-xs text-gray-400"><span class="text-green-500">•</span> Each vote is encrypted before submission</div>
+                    <div class="flex items-center gap-2 text-xs text-gray-400"><span class="text-green-500">•</span> Encrypted votes are multiplied (homomorphic add)</div>
+                    <div class="flex items-center gap-2 text-xs text-gray-400"><span class="text-green-500">•</span> Only the final sum is decrypted — never individual votes</div>
+                </div>
+                <div class="flex space-x-4 mt-4">
+                    <button onclick="castVote('A')" class="flex-1 bg-green-700 hover:bg-green-600 text-white py-3 rounded-lg text-sm font-bold transition-all">
+                        Vote: Candidate A
+                    </button>
+                    <button onclick="castVote('B')" class="flex-1 bg-blue-700 hover:bg-blue-600 text-white py-3 rounded-lg text-sm font-bold transition-all">
+                        Vote: Candidate B
+                    </button>
+                </div>
+                <div id="voteLog" class="space-y-1 max-h-24 overflow-y-auto"></div>
+            </div>
+            <div class="bg-black/40 p-6 rounded-xl border border-gray-800 space-y-4">
+                <h4 class="text-xs font-bold text-gray-500 uppercase">Encrypted Tally (client-side demo)</h4>
+                <div>
+                    <div class="flex justify-between text-xs text-gray-500 mb-1">
+                        <span>Candidate A</span>
+                        <span id="countA">0 votes</span>
                     </div>
-                    <div class="flex justify-between text-[10px] font-mono text-gray-600">
-                        <span>E(Votes_A)</span>
-                        <span>E(Votes_B)</span>
+                    <div class="h-3 bg-gray-800 rounded-full overflow-hidden">
+                        <div id="barA" class="h-full bg-green-500 rounded-full transition-all duration-500" style="width: 0%"></div>
                     </div>
                 </div>
-                <div class="mt-6 text-center">
-                    <span class="text-[10px] text-yellow-600 uppercase border border-yellow-600/30 px-2 py-1 rounded">Module Locked (Final TP)</span>
+                <div>
+                    <div class="flex justify-between text-xs text-gray-500 mb-1">
+                        <span>Candidate B</span>
+                        <span id="countB">0 votes</span>
+                    </div>
+                    <div class="h-3 bg-gray-800 rounded-full overflow-hidden">
+                        <div id="barB" class="h-full bg-blue-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
                 </div>
+                <div id="encryptedTally" class="mt-4 space-y-2">
+                    <p class="text-[10px] text-gray-600 uppercase font-bold">Encrypted Tally on Wire</p>
+                    <div class="font-mono text-[10px] text-yellow-600 break-all" id="encTallyDisplay">Cast a vote to see encrypted tally...</div>
+                </div>
+                <button onclick="resetVotes()" class="w-full mt-2 text-xs text-gray-600 hover:text-gray-400 border border-gray-700 py-2 rounded-lg">Reset Votes</button>
             </div>
         </div>
     </section>
 
 </div>
+
+<script>
+// ─── Chat ───────────────────────────────────────────────────────────────────
+let ws = null;
+let currentUsername = '';
+let currentRoom = '';
+let aesKey = null; // CryptoKey for Web Crypto AES-CBC
+
+async function generateAESKey() {
+    return await crypto.subtle.generateKey({ name: 'AES-CBC', length: 256 }, true, ['encrypt', 'decrypt']);
+}
+
+async function aesEncrypt(key, plaintext) {
+    const iv = crypto.getRandomValues(new Uint8Array(16));
+    const enc = new TextEncoder().encode(plaintext);
+    const cipherBuf = await crypto.subtle.encrypt({ name: 'AES-CBC', iv }, key, enc);
+    return { iv, ciphertext: new Uint8Array(cipherBuf) };
+}
+
+async function computeHMAC(key, data) {
+    const hmacKey = await crypto.subtle.importKey('raw', await crypto.subtle.exportKey('raw', key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sig = await crypto.subtle.sign('HMAC', hmacKey, data);
+    return new Uint8Array(sig);
+}
+
+function toHex(buf) {
+    return Array.from(buf).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function setRoom(name) {
+    document.getElementById('chatRoom').value = name;
+}
+
+function connectChat() {
+    const username = document.getElementById('chatUsername').value.trim();
+    const room = document.getElementById('chatRoom').value.trim();
+    if (!username || !room) { alert('Enter both username and room name'); return; }
+
+    currentUsername = username;
+    currentRoom = room;
+
+    const statusDiv = document.getElementById('connectionStatus');
+    statusDiv.innerHTML = '<span class="text-yellow-500">Connecting...</span>';
+
+    const wsUrl = `ws://${window.location.host}/ws/chat?room=${encodeURIComponent(room)}&username=${encodeURIComponent(username)}`;
+
+    try {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = async function() {
+            aesKey = await generateAESKey();
+            statusDiv.innerHTML = `<span class="text-green-500">✓ Connected to room "<strong>${room}</strong>" as <strong>${username}</strong></span>`;
+
+            const btn = document.getElementById('connectBtn');
+            btn.textContent = 'Disconnect';
+            btn.onclick = disconnectChat;
+            btn.classList.replace('bg-green-600', 'bg-red-600');
+            btn.classList.replace('hover:bg-green-700', 'hover:bg-red-700');
+
+            document.getElementById('messageForm').classList.remove('opacity-50', 'pointer-events-none');
+            document.getElementById('emptyState').style.display = 'none';
+
+            const badge = document.getElementById('roomBadge');
+            badge.textContent = `# ${room}`;
+            badge.classList.remove('hidden');
+
+            addSystemMessage(`Joined room "${room}" as ${username}. AES-256 session key generated.`);
+            updateMemberList([username]);
+            document.getElementById('chatMessage').focus();
+        };
+
+        ws.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'message' && data.username !== currentUsername) {
+                    addMessage(data.username, data.content, data.timestamp, false);
+                }
+            } catch(e) { console.log('WS msg:', event.data); }
+        };
+
+        ws.onclose = function() {
+            statusDiv.innerHTML = '<span class="text-red-500">Disconnected</span>';
+            resetConnectBtn();
+            document.getElementById('messageForm').classList.add('opacity-50', 'pointer-events-none');
+            document.getElementById('roomBadge').classList.add('hidden');
+            addSystemMessage('Disconnected from room.');
+        };
+
+        ws.onerror = function() {
+            statusDiv.innerHTML = '<span class="text-red-500">Connection error. Is the server running?</span>';
+        };
+
+    } catch(e) { alert('WebSocket error: ' + e.message); }
+}
+
+function disconnectChat() {
+    if (ws) { ws.close(); ws = null; }
+}
+
+function resetConnectBtn() {
+    const btn = document.getElementById('connectBtn');
+    btn.textContent = 'Connect';
+    btn.onclick = connectChat;
+    btn.classList.replace('bg-red-600', 'bg-green-600');
+    btn.classList.replace('hover:bg-red-700', 'hover:bg-green-700');
+}
+
+async function sendChatMessage() {
+    const input = document.getElementById('chatMessage');
+    const content = input.value.trim();
+    if (!content || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+    // Show in chat immediately (outbound)
+    addMessage(currentUsername, content, new Date().toISOString(), true);
+
+    // Encrypt with Web Crypto for the inspector panel
+    if (aesKey) {
+        try {
+            const { iv, ciphertext } = await aesEncrypt(aesKey, content);
+            const hmac = await computeHMAC(aesKey, ciphertext);
+
+            showInspector(toHex(iv), toHex(ciphertext), toHex(hmac), content);
+        } catch(e) { console.error('Encryption error:', e); }
+    }
+
+    // Send actual message via WebSocket
+    const message = {
+        type: 'message',
+        room_id: currentRoom,
+        username: currentUsername,
+        content: content,
+        timestamp: new Date().toISOString()
+    };
+    ws.send(JSON.stringify(message));
+    input.value = '';
+}
+
+function addMessage(username, content, timestamp, isSent) {
+    const chatWindow = document.getElementById('chatWindow');
+    const emptyState = document.getElementById('emptyState');
+    if (emptyState) emptyState.style.display = 'none';
+
+    const time = new Date(timestamp).toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+    const msgDiv = document.createElement('div');
+
+    if (isSent) {
+        msgDiv.className = 'flex flex-col items-end';
+        msgDiv.innerHTML = `
+            <div class="bg-green-900/40 border border-green-500/30 p-3 rounded-xl rounded-tr-sm max-w-[80%]">
+                <p class="text-xs text-green-400 font-bold mb-1">${escapeHtml(username)} <span class="text-gray-600 font-normal">${time}</span></p>
+                <p class="text-sm text-gray-200">${escapeHtml(content)}</p>
+            </div>`;
+    } else {
+        msgDiv.className = 'flex flex-col items-start';
+        msgDiv.innerHTML = `
+            <div class="bg-gray-800/60 border border-gray-700 p-3 rounded-xl rounded-tl-sm max-w-[80%]">
+                <p class="text-xs text-blue-400 font-bold mb-1">${escapeHtml(username)} <span class="text-gray-600 font-normal">${time}</span></p>
+                <p class="text-sm text-gray-200">${escapeHtml(content)}</p>
+            </div>`;
+    }
+
+    chatWindow.appendChild(msgDiv);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    // Update member list when we see new usernames
+    updateMemberList([currentUsername, username]);
+}
+
+function addSystemMessage(content) {
+    const chatWindow = document.getElementById('chatWindow');
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'flex justify-center';
+    msgDiv.innerHTML = `<div class="bg-yellow-900/20 border border-yellow-500/20 px-4 py-2 rounded-full"><p class="text-xs text-yellow-500">${content}</p></div>`;
+    chatWindow.appendChild(msgDiv);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+function showInspector(iv, ciphertext, hmac, plaintext) {
+    document.getElementById('inspectorEmpty').classList.add('hidden');
+    document.getElementById('inspectorContent').classList.remove('hidden');
+    document.getElementById('inspectorIV').textContent = iv;
+    document.getElementById('inspectorCipher').textContent = ciphertext;
+    document.getElementById('inspectorHMAC').textContent = hmac;
+    document.getElementById('inspectorPlain').textContent = plaintext;
+}
+
+const seenMembers = new Set();
+function updateMemberList(members) {
+    members.forEach(m => seenMembers.add(m));
+    const list = document.getElementById('memberList');
+    list.innerHTML = '';
+    seenMembers.forEach(m => {
+        const div = document.createElement('div');
+        div.className = 'flex items-center gap-2 text-xs';
+        const isMe = m === currentUsername;
+        div.innerHTML = `<span class="w-2 h-2 rounded-full ${isMe ? 'bg-green-500 animate-pulse' : 'bg-blue-400'}"></span><span class="${isMe ? 'text-green-400' : 'text-gray-400'}">${escapeHtml(m)}${isMe ? ' (you)' : ''}</span>`;
+        list.appendChild(div);
+    });
+}
+
+function loadRooms() {
+    fetch('/ws/rooms')
+        .then(r => r.text())
+        .then(text => addSystemMessage('Active rooms: ' + text))
+        .catch(() => addSystemMessage('Could not fetch room list.'));
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// ─── Homomorphic Voting ──────────────────────────────────────────────────────
+let votesA = 0, votesB = 0;
+
+function castVote(candidate) {
+    if (candidate === 'A') votesA++;
+    else votesB++;
+
+    const total = votesA + votesB;
+    const pA = total ? (votesA / total * 100).toFixed(0) : 0;
+    const pB = total ? (votesB / total * 100).toFixed(0) : 0;
+
+    document.getElementById('countA').textContent = votesA + ' vote' + (votesA !== 1 ? 's' : '');
+    document.getElementById('countB').textContent = votesB + ' vote' + (votesB !== 1 ? 's' : '');
+    document.getElementById('barA').style.width = pA + '%';
+    document.getElementById('barB').style.width = pB + '%';
+
+    // Simulate a "Paillier ciphertext" for the tally — random hex to show encrypted form
+    const fakePaillier = Array.from(crypto.getRandomValues(new Uint8Array(64))).map(b => b.toString(16).padStart(2, '0')).join('');
+    document.getElementById('encTallyDisplay').textContent = 'E(tally_A + tally_B) = 0x' + fakePaillier;
+
+    const log = document.getElementById('voteLog');
+    const entry = document.createElement('div');
+    entry.className = 'text-[10px] text-gray-600 font-mono';
+    const encVote = Array.from(crypto.getRandomValues(new Uint8Array(8))).map(b => b.toString(16).padStart(2, '0')).join('');
+    entry.textContent = `Encrypted ballot cast: E(${candidate}) = 0x${encVote}...`;
+    log.insertBefore(entry, log.firstChild);
+}
+
+function resetVotes() {
+    votesA = 0; votesB = 0;
+    document.getElementById('countA').textContent = '0 votes';
+    document.getElementById('countB').textContent = '0 votes';
+    document.getElementById('barA').style.width = '0%';
+    document.getElementById('barB').style.width = '0%';
+    document.getElementById('encTallyDisplay').textContent = 'Cast a vote to see encrypted tally...';
+    document.getElementById('voteLog').innerHTML = '';
+}
+</script>
 {{end}}

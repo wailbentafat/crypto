@@ -1,173 +1,285 @@
 {{define "tp5"}}
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+<div class="space-y-12">
 
-    <div class="space-y-6">
-        <form action="/tp5/sign" method="POST" class="cyber-panel p-6 rounded-xl space-y-4">
-            <h3 class="text-lg font-semibold text-green-500 mb-4">Digital Signature Operations</h3>
+    <section class="cyber-panel p-8 rounded-2xl">
+        <h3 class="text-2xl font-bold text-green-500 mb-2">Digital Signatures Lab</h3>
+        <p class="text-xs text-gray-500 mb-8">
+            A digital signature proves a message came from a specific sender (authentication) and was not altered (integrity).
+            Sign with your private key — anyone can verify using your public key.
+            Follow the 2-step flow: <strong class="text-green-400">Sign → Verify</strong>.
+        </p>
 
-            <div>
-                <label class="block text-sm font-medium mb-2 text-gray-400">Algorithm</label>
-                <select name="algorithm" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm outline-none focus:border-green-500">
-                    <option value="rsa-pss">RSA-PSS</option>
-                    <option value="rsa-pkcs1">RSA-PKCS#1 v1.5</option>
-                    <option value="dsa">DSA</option>
-                    <option value="ecdsa-p256">ECDSA P-256</option>
-                    <option value="ecdsa-p384">ECDSA P-384</option>
-                </select>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+            <!-- Step 1: Sign -->
+            <div class="space-y-6">
+                <div class="flex items-center space-x-2">
+                    <div class="w-7 h-7 rounded-full bg-green-600 flex items-center justify-center text-xs font-bold">1</div>
+                    <h4 class="text-sm font-bold text-green-400 uppercase">Sign a Message</h4>
+                </div>
+
+                <form action="/tp5/signature" method="POST" class="space-y-4" id="signForm">
+                    <div>
+                        <label class="block text-xs font-medium mb-2 text-gray-500 uppercase">Algorithm</label>
+                        <select name="algorithm" id="signAlgo"
+                            class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none">
+                            <option value="rsa-pss" {{if .SignatureResult}}{{if eq .SignatureResult.Algorithm "RSA-PSS"}}selected{{end}}{{end}}>
+                                RSA-PSS (2048-bit) — randomized, recommended
+                            </option>
+                            <option value="rsa-pkcs1v15" {{if .SignatureResult}}{{if eq .SignatureResult.Algorithm "RSA-PKCS#1 v1.5"}}selected{{end}}{{end}}>
+                                RSA-PKCS#1 v1.5 (2048-bit) — deterministic, legacy
+                            </option>
+                            <option value="ecdsa-p256" {{if .SignatureResult}}{{if eq .SignatureResult.Algorithm "ECDSA P-256"}}selected{{end}}{{end}}>
+                                ECDSA P-256 — smaller key, same security
+                            </option>
+                            <option value="ecdsa-p384" {{if .SignatureResult}}{{if eq .SignatureResult.Algorithm "ECDSA P-384"}}selected{{end}}{{end}}>
+                                ECDSA P-384 — higher security level
+                            </option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium mb-2 text-gray-500 uppercase">Message to Sign</label>
+                        <div class="flex flex-wrap gap-2 mb-2">
+                            <button type="button" onclick="setMsg('Hello World')"
+                                class="text-xs bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded border border-gray-700">Hello World</button>
+                            <button type="button" onclick="setMsg('Transfer €500 to Alice')"
+                                class="text-xs bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded border border-gray-700">Bank transfer</button>
+                            <button type="button" onclick="setMsg('I agree to the contract terms. — Bob')"
+                                class="text-xs bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded border border-gray-700">Contract</button>
+                            <button type="button" onclick="setMsg('Vote: Candidate A')"
+                                class="text-xs bg-gray-800 hover:bg-gray-700 px-2 py-1 rounded border border-gray-700">Vote</button>
+                        </div>
+                        <input type="text" name="message" id="signMsg"
+                            class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none"
+                            placeholder="Enter message to sign..."
+                            value="{{if .SignatureResult}}{{.SignatureResult.Message}}{{else}}Hello World{{end}}">
+                    </div>
+
+                    <button type="submit" name="action" value="sign"
+                        class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-all">
+                        Sign with Private Key
+                    </button>
+                </form>
+
+                {{if .SignatureResult}}
+                {{if .SignatureResult.Signature}}
+                <div class="space-y-4 pt-4 border-t border-gray-800">
+                    <div class="grid grid-cols-2 gap-3 text-xs">
+                        <div class="bg-black/40 p-3 rounded-lg border border-gray-800">
+                            <p class="text-gray-500 uppercase mb-1">Algorithm</p>
+                            <p class="text-green-400 font-bold">{{.SignatureResult.Algorithm}}</p>
+                        </div>
+                        <div class="bg-black/40 p-3 rounded-lg border border-gray-800">
+                            <p class="text-gray-500 uppercase mb-1">Key Size</p>
+                            <p class="text-blue-400 font-bold">{{.SignatureResult.KeySize}} bits</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-xs text-gray-500 uppercase font-bold">Signature (hex)</span>
+                            <button onclick="copyToVerify()"
+                                class="text-xs text-green-400 hover:text-green-300 border border-green-500/30 px-3 py-1 rounded-lg transition-all">
+                                Copy → Verify Form
+                            </button>
+                        </div>
+                        <div id="sigOutput"
+                            class="bg-black/40 p-3 rounded-xl border border-yellow-500/30 font-mono text-xs text-yellow-400 break-all max-h-24 overflow-y-auto">{{.SignatureResult.Signature}}</div>
+                    </div>
+
+                    {{if .SignatureResult.PublicKey}}
+                    <div>
+                        <span class="text-xs text-gray-500 uppercase font-bold block mb-1">Public Key (for verification)</span>
+                        <div id="pubKeyOutput"
+                            class="bg-black/40 p-3 rounded-xl border border-purple-500/20 font-mono text-xs text-purple-400 break-all max-h-20 overflow-y-auto">{{.SignatureResult.PublicKey}}</div>
+                    </div>
+                    {{end}}
+
+                    {{if .SignatureResult.Verified}}
+                    <div class="text-center p-3 rounded-xl border border-green-800 bg-green-900/20">
+                        <span class="text-sm font-bold text-green-400">✓ Signed and self-verified</span>
+                    </div>
+                    {{end}}
+                </div>
+                {{end}}
+                {{end}}
             </div>
 
-            <div>
-                <label class="block text-sm font-medium mb-2 text-gray-400">Key Size (bits)</label>
-                <select name="keysize" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2 text-sm outline-none focus:border-green-500">
-                    <option value="2048">2048</option>
-                    <option value="3072">3072</option>
-                    <option value="4096">4096</option>
-                </select>
-            </div>
+            <!-- Step 2: Verify + Tamper -->
+            <div class="space-y-6">
+                <div class="flex items-center space-x-2">
+                    <div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold">2</div>
+                    <h4 class="text-sm font-bold text-blue-400 uppercase">Verify the Signature</h4>
+                </div>
 
-            <div>
-                <label class="block text-sm font-medium mb-2 text-gray-400">Message to Sign</label>
-                <textarea name="message" rows="4" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none" placeholder="Enter message..."></textarea>
-            </div>
+                <p class="text-xs text-gray-500">
+                    Paste the signature from Step 1. Modify even one character of the message and verification will fail — proving the integrity property.
+                </p>
 
-            <div>
-                <label class="block text-sm font-medium mb-2 text-gray-400">Operation</label>
-                <div class="flex gap-4">
-                    <label class="flex items-center">
-                        <input type="radio" name="mode" value="sign" checked class="mr-2"> Sign
-                    </label>
-                    <label class="flex items-center">
-                        <input type="radio" name="mode" value="verify" class="mr-2"> Verify
-                    </label>
+                <form action="/tp5/signature" method="POST" class="space-y-4" id="verifyForm">
+                    <input type="hidden" name="action" value="verify">
+                    <div>
+                        <label class="block text-xs font-medium mb-2 text-gray-500 uppercase">Algorithm</label>
+                        <select name="algorithm" id="verifyAlgo"
+                            class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm outline-none focus:border-blue-500">
+                            <option value="rsa-pss">RSA-PSS (2048-bit)</option>
+                            <option value="rsa-pkcs1v15">RSA-PKCS#1 v1.5 (2048-bit)</option>
+                            <option value="ecdsa-p256">ECDSA P-256</option>
+                            <option value="ecdsa-p384">ECDSA P-384</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium mb-2 text-gray-500 uppercase">Message (must match exactly)</label>
+                        <input type="text" name="message" id="verifyMsg"
+                            class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-blue-500 outline-none"
+                            placeholder="Original signed message..."
+                            value="{{if .SignatureResult}}{{if not .SignatureResult.PublicKey}}{{.SignatureResult.Message}}{{end}}{{end}}">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium mb-2 text-gray-500 uppercase">Signature (hex)</label>
+                        <textarea name="signature" id="verifySig" rows="3"
+                            class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-xs font-mono focus:border-blue-500 outline-none"
+                            placeholder="Paste signature hex from Step 1, or click 'Copy → Verify Form' above...">{{if .SignatureResult}}{{if not .SignatureResult.PublicKey}}{{.SignatureResult.Signature}}{{end}}{{end}}</textarea>
+                    </div>
+                    <div class="flex gap-3">
+                        <button type="submit"
+                            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all">
+                            Verify Signature
+                        </button>
+                        <button type="button" onclick="tamperAndVerify()"
+                            class="flex-1 bg-red-700 hover:bg-red-800 text-white font-bold py-3 rounded-lg transition-all">
+                            Tamper + Verify
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-gray-600">"Tamper + Verify" appends a space to the message to simulate modification — verification should fail.</p>
+                </form>
+
+                {{if .SignatureResult}}
+                {{if not .SignatureResult.PublicKey}}
+                <div class="text-center p-6 rounded-xl border {{if .SignatureResult.Verified}}border-green-800 bg-green-900/20{{else}}border-red-800 bg-red-900/20{{end}}">
+                    {{if .SignatureResult.Verified}}
+                    <p class="text-2xl font-bold text-green-400 mb-2">✓ VALID</p>
+                    <p class="text-xs text-gray-400">Signature is authentic. Message was not modified and came from the expected signer.</p>
+                    {{else}}
+                    <p class="text-2xl font-bold text-red-400 mb-2">✗ INVALID</p>
+                    <p class="text-xs text-gray-400">Signature does not match. Message was tampered with, or the wrong key/algorithm was used.</p>
+                    {{end}}
+                </div>
+                {{end}}
+                {{end}}
+            </div>
+        </div>
+    </section>
+
+    <!-- Algorithm Reference -->
+    <section class="cyber-panel p-8 rounded-2xl">
+        <h3 class="text-xl font-bold text-green-500 mb-6">Algorithm Reference</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div class="bg-gray-900/60 p-5 rounded-xl border border-gray-700 space-y-3">
+                <h4 class="text-green-400 font-bold text-sm">RSA-PSS</h4>
+                <p class="text-xs text-gray-400">Probabilistic Signature Scheme. Uses random salt — same message produces different signatures each time.</p>
+                <div class="space-y-1 text-[10px] text-gray-500">
+                    <div>Key: 2048–4096 bits</div>
+                    <div>Sig: 256–512 bytes</div>
+                    <div class="text-green-500">Recommended for new systems</div>
                 </div>
             </div>
-
-            <div id="signature-field" class="hidden">
-                <label class="block text-sm font-medium mb-2 text-gray-400">Signature</label>
-                <textarea name="signature" rows="3" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:border-green-500 outline-none font-mono" placeholder="Paste signature..."></textarea>
+            <div class="bg-gray-900/60 p-5 rounded-xl border border-gray-700 space-y-3">
+                <h4 class="text-yellow-400 font-bold text-sm">RSA-PKCS#1 v1.5</h4>
+                <p class="text-xs text-gray-400">Deterministic — same message always produces same signature. Vulnerable to Bleichenbacher attack if misused.</p>
+                <div class="space-y-1 text-[10px] text-gray-500">
+                    <div>Key: 2048–4096 bits</div>
+                    <div>Sig: 256–512 bytes</div>
+                    <div class="text-yellow-500">Legacy — prefer PSS</div>
+                </div>
             </div>
+            <div class="bg-gray-900/60 p-5 rounded-xl border border-gray-700 space-y-3">
+                <h4 class="text-blue-400 font-bold text-sm">ECDSA P-256</h4>
+                <p class="text-xs text-gray-400">Elliptic Curve DSA on NIST P-256. Much shorter keys than RSA for equivalent security.</p>
+                <div class="space-y-1 text-[10px] text-gray-500">
+                    <div>Key: 256 bits</div>
+                    <div>Sig: ~72 bytes</div>
+                    <div class="text-blue-500">Used in TLS, Bitcoin, SSH</div>
+                </div>
+            </div>
+            <div class="bg-gray-900/60 p-5 rounded-xl border border-gray-700 space-y-3">
+                <h4 class="text-purple-400 font-bold text-sm">ECDSA P-384</h4>
+                <p class="text-xs text-gray-400">Higher security variant. Preferred for government and long-term security requirements (NSA Suite B).</p>
+                <div class="space-y-1 text-[10px] text-gray-500">
+                    <div>Key: 384 bits</div>
+                    <div>Sig: ~104 bytes</div>
+                    <div class="text-purple-500">NSA Suite B compliant</div>
+                </div>
+            </div>
+        </div>
 
-            <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg transition-colors shadow-lg shadow-green-900/20">
-                Execute
-            </button>
-        </form>
-
-        {{if .SignResult}}
-        <div class="cyber-panel p-6 rounded-xl">
-            <h3 class="text-lg font-semibold mb-4 text-green-500">Signature Result</h3>
-            <div class="space-y-2 text-sm">
-                <div class="flex justify-between">
-                    <span class="text-gray-400">Algorithm:</span>
-                    <span class="text-green-400">{{.SignResult.Algorithm}}</span>
+        <!-- Security Properties -->
+        <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="space-y-3">
+                <h4 class="text-sm font-bold text-gray-400 uppercase">Security Properties</h4>
+                <div class="space-y-2 text-xs text-gray-400">
+                    <div class="flex items-start gap-2"><span class="text-green-500 mt-0.5">✓</span><span><strong class="text-white">Authenticity</strong> — proves the signer's identity (only they have the private key)</span></div>
+                    <div class="flex items-start gap-2"><span class="text-green-500 mt-0.5">✓</span><span><strong class="text-white">Integrity</strong> — any modification to the message breaks the signature</span></div>
+                    <div class="flex items-start gap-2"><span class="text-green-500 mt-0.5">✓</span><span><strong class="text-white">Non-repudiation</strong> — signer cannot later deny having signed</span></div>
+                    <div class="flex items-start gap-2"><span class="text-yellow-500 mt-0.5">✗</span><span><strong class="text-white">Confidentiality</strong> — signatures do not encrypt; use encryption separately</span></div>
                 </div>
-                <div class="flex justify-between">
-                    <span class="text-gray-400">Key Size:</span>
-                    <span class="text-green-400">{{.SignResult.KeySize}} bits</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-gray-400">Signature Length:</span>
-                    <span class="text-green-400">{{.SignResult.SignatureLen}} bytes</span>
-                </div>
-                <div class="mt-4">
-                    <span class="text-gray-400">Signature:</span>
-                    <div class="bg-black/50 p-3 rounded border border-gray-800 break-all font-mono text-xs text-green-400 mt-1">
-                        {{.SignResult.Signature}}
+            </div>
+            <div class="space-y-3">
+                <h4 class="text-sm font-bold text-gray-400 uppercase">Known Attack Scenarios</h4>
+                <div class="space-y-2 text-xs">
+                    <div class="bg-red-900/20 border border-red-500/20 p-3 rounded-lg">
+                        <p class="text-red-400 font-bold mb-1">Reused k (ECDSA/DSA)</p>
+                        <p class="text-gray-500">If the random nonce k is reused across two signatures, the private key can be mathematically extracted. Sony PS3 was broken this way.</p>
+                    </div>
+                    <div class="bg-orange-900/20 border border-orange-500/20 p-3 rounded-lg">
+                        <p class="text-orange-400 font-bold mb-1">Bleichenbacher (PKCS#1 v1.5)</p>
+                        <p class="text-gray-500">Adaptive chosen-ciphertext attack on RSA PKCS#1 padding. Mitigated by using PSS padding instead.</p>
                     </div>
                 </div>
             </div>
         </div>
-        {{end}}
+    </section>
 
-        {{if .VerifyResult}}
-        <div class="cyber-panel p-6 rounded-xl">
-            <h3 class="text-lg font-semibold mb-4 text-green-500">Verification Result</h3>
-            <div class="flex items-center gap-4">
-                {{if .VerifyResult.Valid}}
-                <div class="text-4xl">✓</div>
-                <div>
-                    <div class="text-green-400 font-semibold">Signature Valid</div>
-                    <div class="text-gray-400 text-sm">Message authenticated successfully</div>
-                </div>
-                {{else}}
-                <div class="text-4xl">✗</div>
-                <div>
-                    <div class="text-red-400 font-semibold">Signature Invalid</div>
-                    <div class="text-gray-400 text-sm">{{.VerifyResult.Error}}</div>
-                </div>
-                {{end}}
-            </div>
-        </div>
-        {{end}}
-    </div>
-
-    <div class="space-y-6">
-        <div class="cyber-panel p-6 rounded-xl">
-            <h3 class="text-lg font-semibold mb-4 text-green-500">Algorithm Comparison</h3>
-            <div class="space-y-4">
-                <div class="bg-gray-800/50 p-4 rounded-lg">
-                    <h4 class="text-green-400 font-medium mb-2">RSA-PSS</h4>
-                    <p class="text-gray-400 text-sm">Probabilistic Signature Scheme - recommended for new applications</p>
-                    <div class="mt-2 text-xs text-gray-500">Sig size: 256-512 bytes | Security: Based on RSA hardness</div>
-                </div>
-
-                <div class="bg-gray-800/50 p-4 rounded-lg">
-                    <h4 class="text-green-400 font-medium mb-2">DSA</h4>
-                    <p class="text-gray-400 text-sm">Digital Signature Algorithm - US Federal Standard</p>
-                    <div class="mt-2 text-xs text-gray-500">Sig size: 320 bytes | Key: 1024-3072 bits</div>
-                </div>
-
-                <div class="bg-gray-800/50 p-4 rounded-lg">
-                    <h4 class="text-green-400 font-medium mb-2">ECDSA</h4>
-                    <p class="text-gray-400 text-sm">Elliptic Curve DSA - smaller keys, equivalent security</p>
-                    <div class="mt-2 text-xs text-gray-500">Sig size: 64-148 bytes | Key: 224-521 bits</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="cyber-panel p-6 rounded-xl">
-            <h3 class="text-lg font-semibold mb-4 text-green-500">Security Properties</h3>
-            <div class="space-y-3 text-sm">
-                <div class="flex items-start gap-2">
-                    <span class="text-green-400">✓</span>
-                    <span class="text-gray-300">Authenticity: Verifies sender identity</span>
-                </div>
-                <div class="flex items-start gap-2">
-                    <span class="text-green-400">✓</span>
-                    <span class="text-gray-300">Integrity: Ensures message not modified</span>
-                </div>
-                <div class="flex items-start gap-2">
-                    <span class="text-green-400">✓</span>
-                    <span class="text-gray-300">Non-repudiation: Sender cannot deny signing</span>
-                </div>
-                <div class="flex items-start gap-2">
-                    <span class="text-yellow-400">!</span>
-                    <span class="text-gray-300">Confidentiality: Not provided (use encryption)</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="cyber-panel p-6 rounded-xl">
-            <h3 class="text-lg font-semibold mb-4 text-green-500">Attack Scenarios</h3>
-            <div class="space-y-3 text-sm text-gray-300">
-                <p><strong class="text-red-400">Reused k (ECDSA/DSA):</strong> If random k is reused, private key can be computed</p>
-                <p><strong class="text-red-400">Bleichenbacher:</strong> RSA-PKCS#1 vulnerable to padding oracle attacks</p>
-                <p><strong class="text-yellow-400">Countermeasure:</strong> Use PSS padding, unique k per signature</p>
-            </div>
-        </div>
-    </div>
+    {{if .SignatureResult}}
+    {{if .SignatureResult.Description}}
+    <section class="cyber-panel p-8 rounded-2xl">
+        <h3 class="text-xl font-bold text-green-500 mb-4">About {{.SignatureResult.Algorithm}}</h3>
+        <pre class="text-xs text-gray-400 whitespace-pre-wrap bg-black/40 p-4 rounded-xl border border-gray-800 leading-relaxed">{{.SignatureResult.Description}}</pre>
+    </section>
+    {{end}}
+    {{end}}
 
 </div>
 
 <script>
-    document.querySelector('input[name="mode"]').forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            const sigField = document.getElementById('signature-field');
-            if (e.target.value === 'verify') {
-                sigField.classList.remove('hidden');
-            } else {
-                sigField.classList.add('hidden');
-            }
-        });
-    });
+function setMsg(msg) {
+    const el = document.getElementById('signMsg');
+    if (el) el.value = msg;
+}
+
+function copyToVerify() {
+    const sig  = document.getElementById('sigOutput')?.textContent?.trim() || '';
+    const msg  = document.getElementById('signMsg')?.value || '';
+    const algo = document.getElementById('signAlgo')?.value || '';
+
+    const vs = document.getElementById('verifySig');
+    const vm = document.getElementById('verifyMsg');
+    const va = document.getElementById('verifyAlgo');
+
+    if (vs) { vs.value = sig; vs.style.borderColor = '#22c55e'; setTimeout(() => vs.style.borderColor = '', 1500); }
+    if (vm) { vm.value = msg; }
+    if (va) { va.value = algo; }
+}
+
+function tamperAndVerify() {
+    const vm = document.getElementById('verifyMsg');
+    if (vm) {
+        vm.value = vm.value + ' ';
+        vm.style.borderColor = '#ef4444';
+        setTimeout(() => vm.style.borderColor = '', 1500);
+    }
+    document.getElementById('verifyForm')?.submit();
+}
 </script>
 {{end}}

@@ -8,7 +8,9 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"html/template"
 	"io"
@@ -28,6 +30,7 @@ import (
 	"crypto/internal/OTP"
 	"crypto/internal/Vigenere"
 	"crypto/internal/analyzer"
+	"crypto/internal/Signature"
 	"crypto/md5"
 	"crypto/sha512"
 )
@@ -67,16 +70,32 @@ type PageData struct {
 	ECDHResult      *ECDHResult
 	ECDHAESKey      string
 	// TP4
-	Hashes   map[string]string
-	HashAval float64
+	Hashes          map[string]string
+	HashAval        float64
+	SignatureResult  *SignatureResult
 	// TP6
-	ChatLog []string
-	VoteRes map[string]int
+	ChatLog      []string
+	VoteRes      map[string]int
+	// RSA Text Demo
+	RSATextResult *RSATextResult
 }
 
 type RSAKeyPair struct {
-	PublicN  string
-	PrivateD string
+	PublicN       string
+	PrivateD      string
+	PublicKeyPEM  string
+	PrivateKeyPEM string
+	KeySize       int
+}
+
+type RSATextResult struct {
+	Mode          string // "encrypt" or "decrypt"
+	Plaintext     string
+	CiphertextHex string
+	SessionKeyHex string
+	WrappedKeyHex string
+	Decrypted     string
+	Error         string
 }
 
 type BenchmarkResult struct {
@@ -112,6 +131,17 @@ type ECDHResult struct {
 	BobPublicX   string
 	BobPublicY   string
 	SharedSecret string
+}
+
+type SignatureResult struct {
+	Algorithm    string
+	Message      string
+	Signature    string
+	Verified    bool
+	PublicKey    string
+	PrivateKey   string
+	KeySize      int
+	Description  string
 }
 
 var templates = template.Must(template.ParseGlob("templates/*.html"))
@@ -641,13 +671,24 @@ func RSAKeyGenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Encode private key as PEM
+	privDER, _ := x509.MarshalPKCS8PrivateKey(privateKey)
+	privPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privDER})
+
+	// Encode public key as PEM
+	pubDER, _ := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	pubPEM := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubDER})
+
 	data := PageData{
 		Title:        "TP 3: Asymmetric & MitM Lab",
 		ActiveTab:    "tp3",
 		ActiveSubTab: "hybrid",
 		RSAKeys: &RSAKeyPair{
-			PublicN:  privateKey.PublicKey.N.String(),
-			PrivateD: privateKey.D.String(),
+			PublicN:       privateKey.PublicKey.N.String(),
+			PrivateD:      privateKey.D.String(),
+			PublicKeyPEM:  string(pubPEM),
+			PrivateKeyPEM: string(privPEM),
+			KeySize:       bits,
 		},
 	}
 
@@ -720,6 +761,176 @@ func HybridEncryptHandler(w http.ResponseWriter, r *http.Request) {
 // Hybrid Decrypt
 func HybridDecryptHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/tp3", http.StatusSeeOther)
+}
+
+// RSA Text Encrypt — encrypts a plaintext message using AES-256-CBC + RSA OAEP key wrapping
+func RSATextEncryptHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/tp3", http.StatusSeeOther)
+		return
+	}
+
+	plaintext := r.FormValue("plaintext")
+	pubKeyPEM := r.FormValue("public_key_pem")
+	if plaintext == "" {
+		plaintext = "Hello, secure world!"
+	}
+
+	// Parse public key PEM
+	block, _ := pem.Decode([]byte(pubKeyPEM))
+	if block == nil {
+		data := PageData{
+			Title: "TP 3: Asymmetric & MitM Lab", ActiveTab: "tp3", ActiveSubTab: "hybrid",
+			RSATextResult: &RSATextResult{Error: "Invalid or missing public key PEM. Generate keys first."},
+		}
+		templates.ExecuteTemplate(w, "base.html", data)
+		return
+	}
+
+	pubKeyIface, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		data := PageData{
+			Title: "TP 3: Asymmetric & MitM Lab", ActiveTab: "tp3", ActiveSubTab: "hybrid",
+			RSATextResult: &RSATextResult{Error: "Failed to parse public key: " + err.Error()},
+		}
+		templates.ExecuteTemplate(w, "base.html", data)
+		return
+	}
+	rsaPubKey := pubKeyIface.(*rsa.PublicKey)
+
+	// Generate AES-256 session key
+	sessionKey := make([]byte, 32)
+	rand.Read(sessionKey)
+
+	// Encrypt plaintext with AES-CBC
+	iv := make([]byte, aes.BlockSize)
+	rand.Read(iv)
+	paddedText := pkcs7Pad([]byte(plaintext), aes.BlockSize)
+	aesBlock, _ := aes.NewCipher(sessionKey)
+	ciphertext := make([]byte, len(paddedText))
+	cipher.NewCBCEncrypter(aesBlock, iv).CryptBlocks(ciphertext, paddedText)
+
+	// Combine IV + ciphertext and encode as hex
+	ciphertextHex := hex.EncodeToString(append(iv, ciphertext...))
+	sessionKeyHex := hex.EncodeToString(sessionKey)
+
+	// Wrap the session key with RSA OAEP
+	wrappedKey, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, rsaPubKey, sessionKey, nil)
+	if err != nil {
+		data := PageData{
+			Title: "TP 3: Asymmetric & MitM Lab", ActiveTab: "tp3", ActiveSubTab: "hybrid",
+			RSATextResult: &RSATextResult{Error: "RSA OAEP encryption failed: " + err.Error()},
+		}
+		templates.ExecuteTemplate(w, "base.html", data)
+		return
+	}
+	wrappedKeyHex := hex.EncodeToString(wrappedKey)
+
+	data := PageData{
+		Title: "TP 3: Asymmetric & MitM Lab", ActiveTab: "tp3", ActiveSubTab: "hybrid",
+		RSATextResult: &RSATextResult{
+			Mode:          "encrypt",
+			Plaintext:     plaintext,
+			CiphertextHex: ciphertextHex,
+			SessionKeyHex: sessionKeyHex,
+			WrappedKeyHex: wrappedKeyHex,
+		},
+	}
+	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+// RSA Text Decrypt — decrypts using RSA private key to unwrap AES key, then AES-CBC to decrypt message
+func RSATextDecryptHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/tp3", http.StatusSeeOther)
+		return
+	}
+
+	ciphertextHex := r.FormValue("ciphertext_hex")
+	wrappedKeyHex := r.FormValue("wrapped_key_hex")
+	privKeyPEM := r.FormValue("private_key_pem")
+
+	errResult := func(msg string) {
+		data := PageData{
+			Title: "TP 3: Asymmetric & MitM Lab", ActiveTab: "tp3", ActiveSubTab: "hybrid",
+			RSATextResult: &RSATextResult{Mode: "decrypt", Error: msg,
+				CiphertextHex: ciphertextHex, WrappedKeyHex: wrappedKeyHex},
+		}
+		templates.ExecuteTemplate(w, "base.html", data)
+	}
+
+	block, _ := pem.Decode([]byte(privKeyPEM))
+	if block == nil {
+		errResult("Invalid or missing private key PEM.")
+		return
+	}
+	privKeyIface, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		errResult("Failed to parse private key: " + err.Error())
+		return
+	}
+	rsaPrivKey := privKeyIface.(*rsa.PrivateKey)
+
+	wrappedKey, err := hex.DecodeString(wrappedKeyHex)
+	if err != nil {
+		errResult("Invalid wrapped key hex.")
+		return
+	}
+
+	sessionKey, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, rsaPrivKey, wrappedKey, nil)
+	if err != nil {
+		errResult("RSA OAEP decryption failed (wrong private key?): " + err.Error())
+		return
+	}
+
+	ciphertextFull, err := hex.DecodeString(ciphertextHex)
+	if err != nil || len(ciphertextFull) < aes.BlockSize {
+		errResult("Invalid ciphertext hex.")
+		return
+	}
+
+	iv := ciphertextFull[:aes.BlockSize]
+	ciphertext := ciphertextFull[aes.BlockSize:]
+	if len(ciphertext)%aes.BlockSize != 0 {
+		errResult("Ciphertext length is not a multiple of AES block size.")
+		return
+	}
+
+	aesBlock, _ := aes.NewCipher(sessionKey)
+	plaintext := make([]byte, len(ciphertext))
+	cipher.NewCBCDecrypter(aesBlock, iv).CryptBlocks(plaintext, ciphertext)
+	plaintext = pkcs7Unpad(plaintext)
+
+	data := PageData{
+		Title: "TP 3: Asymmetric & MitM Lab", ActiveTab: "tp3", ActiveSubTab: "hybrid",
+		RSATextResult: &RSATextResult{
+			Mode:          "decrypt",
+			CiphertextHex: ciphertextHex,
+			WrappedKeyHex: wrappedKeyHex,
+			Decrypted:     string(plaintext),
+		},
+	}
+	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+func pkcs7Pad(data []byte, blockSize int) []byte {
+	padding := blockSize - len(data)%blockSize
+	padtext := make([]byte, padding)
+	for i := range padtext {
+		padtext[i] = byte(padding)
+	}
+	return append(data, padtext...)
+}
+
+func pkcs7Unpad(data []byte) []byte {
+	if len(data) == 0 {
+		return data
+	}
+	padding := int(data[len(data)-1])
+	if padding > len(data) || padding == 0 {
+		return data
+	}
+	return data[:len(data)-padding]
 }
 
 // Hybrid Benchmark
@@ -987,10 +1198,24 @@ func ECDHHandler(w http.ResponseWriter, r *http.Request) {
 
 func TP4Handler(w http.ResponseWriter, r *http.Request) {
 	data := PageData{
-		Title:     "TP 4: Integrity & Signatures Lab",
+		Title:     "TP 4: Hash Functions Lab",
 		ActiveTab: "tp4",
 	}
 	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+// --- TP 5 Handlers ---
+
+func TP5Handler(w http.ResponseWriter, r *http.Request) {
+	data := PageData{
+		Title:     "TP 5: Digital Signatures Lab",
+		ActiveTab: "tp5",
+	}
+	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+func TP5SignatureHandler(w http.ResponseWriter, r *http.Request) {
+	doSignature(w, r, "tp5")
 }
 
 func HashHandler(w http.ResponseWriter, r *http.Request) {
@@ -1032,6 +1257,201 @@ func HashHandler(w http.ResponseWriter, r *http.Request) {
 		InputText: inputText,
 		Hashes:    hashes,
 		HashAval:  avalanche,
+	}
+
+	templates.ExecuteTemplate(w, "base.html", data)
+}
+
+func SignatureHandler(w http.ResponseWriter, r *http.Request) {
+	doSignature(w, r, "tp4")
+}
+
+func doSignature(w http.ResponseWriter, r *http.Request, activeTab string) {
+	if r.Method != http.MethodPost {
+		http.Redirect(w, r, "/"+activeTab, http.StatusSeeOther)
+		return
+	}
+
+	algorithm := r.FormValue("algorithm")
+	message := r.FormValue("message")
+	keySize := r.FormValue("keysize")
+	action := r.FormValue("action")
+
+	var result *SignatureResult
+
+	if message == "" {
+		message = "Hello World"
+	}
+
+	switch algorithm {
+	case "rsa-pss":
+		bits := 2048
+		if keySize != "" {
+			if parsed, err := strconv.Atoi(keySize); err == nil {
+				bits = parsed
+			}
+		}
+		sig, err := signature.InitRSASignature(bits)
+		if err != nil {
+			result = &SignatureResult{
+				Algorithm:   "RSA-PSS",
+				Message:     message,
+				Description: "Error: " + err.Error(),
+			}
+		} else {
+			if action == "verify" {
+				sigHex := r.FormValue("signature")
+				verified := sig.VerifyPSS(message, sigHex)
+				result = &SignatureResult{
+					Algorithm:   "RSA-PSS",
+					Message:     message,
+					Signature:   sigHex,
+					Verified:    verified,
+					KeySize:     bits,
+					Description: sig.GetDescription(),
+				}
+			} else {
+				sigHex, _ := sig.SignPSS(message)
+				result = &SignatureResult{
+					Algorithm:   "RSA-PSS",
+					Message:     message,
+					Signature:   sigHex,
+					Verified:    true,
+					PublicKey:   sig.GetPublicKey(),
+					KeySize:     bits,
+					Description: sig.GetDescription(),
+				}
+			}
+		}
+	case "rsa-pkcs1v15":
+		bits := 2048
+		if keySize != "" {
+			if parsed, err := strconv.Atoi(keySize); err == nil {
+				bits = parsed
+			}
+		}
+		sig, err := signature.InitRSASignature(bits)
+		if err != nil {
+			result = &SignatureResult{
+				Algorithm:   "RSA-PKCS#1 v1.5",
+				Message:     message,
+				Description: "Error: " + err.Error(),
+			}
+		} else {
+			if action == "verify" {
+				sigHex := r.FormValue("signature")
+				verified := sig.VerifyPKCS1v15(message, sigHex)
+				result = &SignatureResult{
+					Algorithm:   "RSA-PKCS#1 v1.5",
+					Message:     message,
+					Signature:   sigHex,
+					Verified:    verified,
+					KeySize:     bits,
+					Description: sig.GetDescription(),
+				}
+			} else {
+				sigHex, _ := sig.SignPKCS1v15(message)
+				result = &SignatureResult{
+					Algorithm:   "RSA-PKCS#1 v1.5",
+					Message:     message,
+					Signature:   sigHex,
+					Verified:    true,
+					PublicKey:   sig.GetPublicKey(),
+					KeySize:     bits,
+					Description: sig.GetDescription(),
+				}
+			}
+		}
+	case "ecdsa-p256":
+		sig, err := signature.InitECDSA("P-256")
+		if err != nil {
+			result = &SignatureResult{
+				Algorithm:   "ECDSA P-256",
+				Message:     message,
+				Description: "Error: " + err.Error(),
+			}
+		} else {
+			if action == "verify" {
+				sigHex := r.FormValue("signature")
+				verified := sig.Verify(message, sigHex)
+				result = &SignatureResult{
+					Algorithm:   "ECDSA P-256",
+					Message:     message,
+					Signature:   sigHex,
+					Verified:    verified,
+					PublicKey:   sig.GetPublicKey(),
+					KeySize:     256,
+					Description: sig.GetDescription(),
+				}
+			} else {
+				sigHex, _ := sig.Sign(message)
+				result = &SignatureResult{
+					Algorithm:   "ECDSA P-256",
+					Message:     message,
+					Signature:   sigHex,
+					Verified:    true,
+					PublicKey:   sig.GetPublicKey(),
+					KeySize:     256,
+					Description: sig.GetDescription(),
+				}
+			}
+		}
+	case "ecdsa-p384":
+		sig, err := signature.InitECDSA("P-384")
+		if err != nil {
+			result = &SignatureResult{
+				Algorithm:   "ECDSA P-384",
+				Message:     message,
+				Description: "Error: " + err.Error(),
+			}
+		} else {
+			if action == "verify" {
+				sigHex := r.FormValue("signature")
+				verified := sig.Verify(message, sigHex)
+				result = &SignatureResult{
+					Algorithm:   "ECDSA P-384",
+					Message:     message,
+					Signature:   sigHex,
+					Verified:    verified,
+					PublicKey:   sig.GetPublicKey(),
+					KeySize:     384,
+					Description: sig.GetDescription(),
+				}
+			} else {
+				sigHex, _ := sig.Sign(message)
+				result = &SignatureResult{
+					Algorithm:   "ECDSA P-384",
+					Message:     message,
+					Signature:   sigHex,
+					Verified:    true,
+					PublicKey:   sig.GetPublicKey(),
+					KeySize:     384,
+					Description: sig.GetDescription(),
+				}
+			}
+		}
+	default:
+		sig, _ := signature.InitRSASignature(2048)
+		sigHex, _ := sig.SignPSS(message)
+		result = &SignatureResult{
+			Algorithm:   "RSA-PSS (Default)",
+			Message:     message,
+			Signature:   sigHex,
+			Verified:    true,
+			PublicKey:   sig.GetPublicKey(),
+			KeySize:     2048,
+			Description: sig.GetDescription(),
+		}
+	}
+
+	title := "TP 4: Hash Functions Lab"
+	if activeTab == "tp5" {
+		title = "TP 5: Digital Signatures Lab"
+	}
+	data := PageData{
+		Title:           title,
+		ActiveTab:       activeTab,
+		SignatureResult: result,
 	}
 
 	templates.ExecuteTemplate(w, "base.html", data)
